@@ -1,0 +1,6 @@
+{
+  "uri": "mongodb+srv://usuario:password@cluster.mongodb.net/",
+  "dbName": "farmapos",
+  "deviceId": "web-api",
+  "deviceName": "FarmaPOS Web"
+}

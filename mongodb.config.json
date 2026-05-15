@@ -1,0 +1,6 @@
+{
+  "uri": "mongodb+srv://jhoselagarez_db_user:l2C1DqqQTWM1BS28@farmapos.90rrbrq.mongodb.net/",
+  "dbName": "farmapos",
+  "deviceId": "web-api",
+  "deviceName": "FarmaPOS Web"
+}
