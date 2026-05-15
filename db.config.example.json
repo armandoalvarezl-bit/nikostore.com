@@ -1,0 +1,18 @@
+{
+  "host": "127.0.0.1",
+  "port": 3306,
+  "user": "root",
+  "password": "",
+  "database": "db_posfarma",
+  "tenantDatabase": {
+    "enabled": true,
+    "prefix": "db_posfarma_empresa_",
+    "nameTemplate": "{prefix}{companyId}",
+    "templateDatabase": "db_posfarma",
+    "schemaFile": "root.session.sql",
+    "charset": "utf8mb4",
+    "collate": "utf8mb4_unicode_ci"
+  },
+  "supportApiUrl": "https://tu-dominio-o-ip/v1",
+  "supportApiKey": "pon_una_clave_segura"
+}
