@@ -14,6 +14,8 @@ var PURCHASES_SHEET_NAME = 'Compras';
 var RETURNS_SHEET_NAME = 'Devoluciones';
 var PROMOTIONS_SHEET_NAME = 'Promociones';
 var AUDIT_LOGS_SHEET_NAME = 'Auditoria';
+var SUPPORT_TICKETS_SHEET_NAME = 'SoporteTickets';
+var SUPPORT_MESSAGES_SHEET_NAME = 'SoporteMensajes';
 var REQUIRED_HEADERS = ['id', 'sku', 'nombre', 'categoria', 'precio', 'stock', 'lote', 'fecha_vencimiento', 'laboratorio', 'registro_invima', 'codigo_barras', 'descripcion', 'imagen_url', 'activo'];
 var LEGACY_SALES_HEADERS = ['id', 'ticket_numero', 'fecha', 'hora', 'cliente_nombre', 'cliente_documento', 'metodo_pago', 'recibido', 'cambio', 'subtotal', 'impuesto', 'total', 'items_json', 'creado_en'];
 var SALES_HEADERS = ['id', 'ticket_numero', 'fecha', 'hora', 'cliente_nombre', 'cliente_documento', 'metodo_pago', 'recibido', 'cambio', 'subtotal', 'impuesto', 'total', 'items_json', 'creado_en', 'puntos_usados', 'descuento_puntos', 'puntos_ganados'];
@@ -27,6 +29,8 @@ var PURCHASE_HEADERS = ['id', 'proveedor_id', 'proveedor_nombre', 'inventario_id
 var RETURN_HEADERS = ['id', 'venta_id', 'detalle_venta_id', 'ticket_numero', 'cliente_nombre', 'inventario_id', 'producto_nombre', 'cantidad', 'precio_unitario', 'total', 'motivo', 'repone_stock', 'fecha', 'creado_en', 'procesado_por'];
 var PROMOTION_HEADERS = ['id', 'nombre', 'alcance', 'objetivo', 'tipo_descuento', 'valor_descuento', 'activo'];
 var AUDIT_LOG_HEADERS = ['id', 'modulo', 'accion', 'entity_id', 'entity_name', 'detalle', 'usuario', 'usuario_login', 'creado_en'];
+var SUPPORT_TICKET_HEADERS = ['id', 'ticket_code', 'empresa_id', 'empresa_nombre', 'licencia_codigo', 'contacto_nombre', 'contacto_email', 'contacto_telefono', 'titulo', 'categoria', 'prioridad', 'estado', 'creado_por_usuario', 'creado_por_nombre', 'creado_en', 'ultimo_mensaje_en', 'no_leidos_empresa', 'no_leidos_interno'];
+var SUPPORT_MESSAGE_HEADERS = ['id', 'ticket_id', 'autor_scope', 'autor_usuario', 'autor_nombre', 'mensaje', 'creado_en'];
 var COMPANY_PROFILE_KEYS = ['name', 'nit', 'phone', 'email', 'address', 'city', 'manager', 'logo_url'];
 var LEGACY_USER_HEADERS = ['Id', 'Nombre', 'Usuario', 'contraseÃ±a', 'Estado'];
 var WEB_USER_HEADERS = ['Id', 'EmpresaId', 'Nombre', 'Usuario', 'contrasena', 'Rol', 'Estado', 'CreadoEn'];
@@ -84,6 +88,13 @@ function doGet(e) {
         total: sales.length,
         sales: sales
       });
+    }
+
+    if (mode === 'support') {
+      return jsonResponse_(getSupportOverviewWeb_({
+        companyId: getParam_(e, 'companyId', ''),
+        isInternal: getParam_(e, 'isInternal', 'false') === 'true'
+      }));
     }
 
     if (mode === 'withdrawals') {
@@ -335,6 +346,30 @@ function doPost(e) {
 
     if (action === 'add_audit_log') {
       return jsonResponse_(addAuditLogWeb_(payload.log || payload));
+    }
+
+    if (action === 'support_overview') {
+      return jsonResponse_(getSupportOverviewWeb_(payload));
+    }
+
+    if (action === 'support_thread') {
+      return jsonResponse_(getSupportThreadWeb_(payload.ticketId || payload.ticket_id));
+    }
+
+    if (action === 'support_create_ticket') {
+      return jsonResponse_(createSupportTicketWeb_(payload));
+    }
+
+    if (action === 'support_send_message') {
+      return jsonResponse_(sendSupportMessageWeb_(payload));
+    }
+
+    if (action === 'support_set_status') {
+      return jsonResponse_(setSupportTicketStatusWeb_(payload.ticketId || payload.ticket_id, payload.status));
+    }
+
+    if (action === 'support_mark_read') {
+      return jsonResponse_(markSupportTicketReadWeb_(payload.ticketId || payload.ticket_id, payload.readerScope || payload.reader_scope));
     }
 
     if (action === 'decrement_stock') {
@@ -870,6 +905,38 @@ function normalizeHeaderKey_(value) {
     .toLowerCase();
 }
 
+function parseNumber_(value, fallback) {
+  if (typeof value === 'number') {
+    return isFinite(value) ? value : (fallback || 0);
+  }
+  if (value == null) return fallback || 0;
+
+  var text = String(value).trim();
+  if (!text) return fallback || 0;
+
+  var cleaned = text.replace(/[^\d,.-]/g, '');
+  if (!cleaned) return fallback || 0;
+
+  var hasComma = cleaned.indexOf(',') !== -1;
+  var hasDot = cleaned.indexOf('.') !== -1;
+  var normalized = cleaned;
+
+  if (hasComma && hasDot) {
+    normalized = cleaned.lastIndexOf(',') > cleaned.lastIndexOf('.')
+      ? cleaned.replace(/\./g, '').replace(',', '.')
+      : cleaned.replace(/,/g, '');
+  } else if (hasComma) {
+    normalized = /^-?\d{1,3}(,\d{3})+$/.test(cleaned)
+      ? cleaned.replace(/,/g, '')
+      : cleaned.replace(',', '.');
+  } else if (hasDot && /^-?\d{1,3}(\.\d{3})+$/.test(cleaned)) {
+    normalized = cleaned.replace(/\./g, '');
+  }
+
+  var parsed = Number(normalized);
+  return isFinite(parsed) ? parsed : (fallback || 0);
+}
+
 function ensureCashClosuresHeaders_(sheet) {
   var lastColumn = Math.max(sheet.getLastColumn(), CASH_CLOSURES_HEADERS.length);
   var existingHeaders = lastColumn ? sheet.getRange(1, 1, 1, lastColumn).getValues()[0] : [];
@@ -995,8 +1062,8 @@ function normalizeStoredItem_(item) {
     sku: String(item.sku || '').trim(),
     nombre: String(item.nombre || '').trim(),
     categoria: String(item.categoria || '').trim().toLowerCase(),
-    precio: Number(item.precio || 0),
-    stock: Number(item.stock || 0),
+    precio: parseNumber_(item.precio, 0),
+    stock: parseNumber_(item.stock, 0),
     lote: String(item.lote || '').trim(),
     fecha_vencimiento: normalizeDateValue_(item.fecha_vencimiento),
     laboratorio: String(item.laboratorio || '').trim(),
@@ -1014,8 +1081,8 @@ function normalizeIncomingItem_(item) {
     sku: String(item.sku || '').trim(),
     nombre: String(item.nombre || item.name || '').trim(),
     categoria: String(item.categoria || item.category || 'general').trim().toLowerCase(),
-    precio: Number(item.precio != null ? item.precio : item.price || 0),
-    stock: Number(item.stock != null ? item.stock : 0),
+    precio: parseNumber_(item.precio != null ? item.precio : item.price || 0, 0),
+    stock: parseNumber_(item.stock != null ? item.stock : 0, 0),
     lote: String(item.lote || item.batch || '').trim(),
     fecha_vencimiento: normalizeDateValue_(item.fecha_vencimiento || item.expirationDate || item.expiration_date || ''),
     laboratorio: String(item.laboratorio || item.lab || '').trim(),
@@ -1580,12 +1647,31 @@ function upsertInventoryItem_(sheet, item) {
   return item;
 }
 
+function buildSaleTicketNumber_(values, saleDate) {
+  var date = saleDate ? new Date(saleDate) : new Date();
+  if (isNaN(date.getTime())) date = new Date();
+
+  var dateCode = Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyyMMdd');
+  var maxSequence = 0;
+
+  for (var rowIndex = 1; rowIndex < values.length; rowIndex += 1) {
+    var ticket = String(values[rowIndex][1] || '').trim();
+    if (ticket.indexOf(dateCode) === -1) continue;
+
+    var match = ticket.match(/(\d+)$/);
+    if (match) {
+      maxSequence = Math.max(maxSequence, Number(match[1]) || 0);
+    }
+  }
+
+  return 'FAC-' + dateCode + '-' + ('000000' + (maxSequence + 1)).slice(-6);
+}
+
 function appendSale_(sheet, sale) {
   var values = sheet.getDataRange().getValues();
-  var nextNumber = Math.max(values.length, 1);
   var normalized = normalizeIncomingSale_(sale);
   if (!normalized.ticketNumber) {
-    normalized.ticketNumber = 'T-' + ('0000' + nextNumber).slice(-4);
+    normalized.ticketNumber = buildSaleTicketNumber_(values, normalized.date);
   }
 
   var createdAt = new Date().toISOString();
@@ -2097,6 +2183,8 @@ function setupWebApp_(payload) {
   summary.sheets.push(describeSetupSheet_(RETURNS_SHEET_NAME, RETURN_HEADERS, getReturnsSheet_, dryRun));
   summary.sheets.push(describeSetupSheet_(PROMOTIONS_SHEET_NAME, PROMOTION_HEADERS, getPromotionsSheet_, dryRun));
   summary.sheets.push(describeSetupSheet_(AUDIT_LOGS_SHEET_NAME, AUDIT_LOG_HEADERS, getAuditLogsSheet_, dryRun));
+  summary.sheets.push(describeSetupSheet_(SUPPORT_TICKETS_SHEET_NAME, SUPPORT_TICKET_HEADERS, getSupportTicketsSheet_, dryRun));
+  summary.sheets.push(describeSetupSheet_(SUPPORT_MESSAGES_SHEET_NAME, SUPPORT_MESSAGE_HEADERS, getSupportMessagesSheet_, dryRun));
 
   if (!dryRun && payload && payload.admin) {
     saveUserWeb_({
@@ -2155,6 +2243,14 @@ function getLicenseHistorySheet_() {
   return getOrCreateSheet_(LICENSE_HISTORY_SHEET_NAME, LICENSE_HISTORY_HEADERS);
 }
 
+function getSupportTicketsSheet_() {
+  return getOrCreateSheet_(SUPPORT_TICKETS_SHEET_NAME, SUPPORT_TICKET_HEADERS);
+}
+
+function getSupportMessagesSheet_() {
+  return getOrCreateSheet_(SUPPORT_MESSAGES_SHEET_NAME, SUPPORT_MESSAGE_HEADERS);
+}
+
 function ensureSimpleHeaders_(sheet, headers) {
   var lastColumn = Math.max(sheet.getLastColumn(), headers.length);
   var existingHeaders = lastColumn ? sheet.getRange(1, 1, 1, lastColumn).getValues()[0] : [];
@@ -2181,8 +2277,50 @@ function readSimpleItems_(sheet) {
   });
 }
 
+function safeWorkbookSection_(errors, section, sheetName, reader) {
+  try {
+    return reader();
+  } catch (error) {
+    errors.push({
+      section: section,
+      sheet: sheetName,
+      error: error.message
+    });
+    return [];
+  }
+}
+
 function buildFullWorkbookState_(mode) {
-  var inventory = readInventoryItems_(getInventorySheet_());
+  var errors = [];
+  var inventory = safeWorkbookSection_(errors, 'inventory', SHEET_NAME, function() {
+    return readInventoryItems_(getInventorySheet_());
+  });
+  var sales = safeWorkbookSection_(errors, 'sales', SALES_SHEET_NAME, function() {
+    return readSalesItems_(getSalesSheet_());
+  });
+  var clients = safeWorkbookSection_(errors, 'clients', CLIENTS_SHEET_NAME, readClientsWeb_);
+  var suppliers = safeWorkbookSection_(errors, 'suppliers', SUPPLIERS_SHEET_NAME, readSuppliersWeb_);
+  var purchases = safeWorkbookSection_(errors, 'purchases', PURCHASES_SHEET_NAME, readPurchasesWeb_);
+  var returns = safeWorkbookSection_(errors, 'returns', RETURNS_SHEET_NAME, readReturnsWeb_);
+  var promotions = safeWorkbookSection_(errors, 'promotions', PROMOTIONS_SHEET_NAME, readPromotionsWeb_);
+  var auditLogs = safeWorkbookSection_(errors, 'auditLogs', AUDIT_LOGS_SHEET_NAME, readAuditLogsWeb_);
+  var withdrawals = safeWorkbookSection_(errors, 'withdrawals', WITHDRAWALS_SHEET_NAME, function() {
+    return readWithdrawalItems_(getWithdrawalsSheet_());
+  });
+  var closures = safeWorkbookSection_(errors, 'closures', CASH_CLOSURES_SHEET_CANDIDATES[0], function() {
+    return readCashClosureItems_(getCashClosuresSheet_());
+  });
+  var profile = {};
+  try {
+    profile = readCompanyProfile_(getSettingsSheet_());
+  } catch (profileError) {
+    errors.push({
+      section: 'profile',
+      sheet: SETTINGS_SHEET_NAME,
+      error: profileError.message
+    });
+  }
+
   return {
     ok: true,
     mode: mode || 'all',
@@ -2190,16 +2328,17 @@ function buildFullWorkbookState_(mode) {
     total: inventory.length,
     items: inventory,
     inventory: inventory,
-    sales: readSalesItems_(getSalesSheet_()),
-    clients: readClientsWeb_(),
-    suppliers: readSuppliersWeb_(),
-    purchases: readPurchasesWeb_(),
-    returns: readReturnsWeb_(),
-    promotions: readPromotionsWeb_(),
-    auditLogs: readAuditLogsWeb_(),
-    withdrawals: readWithdrawalItems_(getWithdrawalsSheet_()),
-    closures: readCashClosureItems_(getCashClosuresSheet_()),
-    profile: readCompanyProfile_(getSettingsSheet_())
+    sales: sales,
+    clients: clients,
+    suppliers: suppliers,
+    purchases: purchases,
+    returns: returns,
+    promotions: promotions,
+    auditLogs: auditLogs,
+    withdrawals: withdrawals,
+    closures: closures,
+    profile: profile,
+    sync_errors: errors
   };
 }
 
@@ -2515,6 +2654,202 @@ function addAuditLogWeb_(payload) {
   };
   writeSimpleRow_(getAuditLogsSheet_(), AUDIT_LOG_HEADERS, -1, record);
   return { ok: true, action: 'add_audit_log', updated_at: new Date().toISOString(), auditLogs: readAuditLogsWeb_() };
+}
+
+function normalizeSupportTicketWeb_(item) {
+  return {
+    id: String(item.id || '').trim(),
+    ticketCode: String(item.ticket_code || '').trim(),
+    companyId: String(item.empresa_id || '').trim(),
+    companyName: String(item.empresa_nombre || '').trim(),
+    licenseCode: String(item.licencia_codigo || '').trim(),
+    contactName: String(item.contacto_nombre || '').trim(),
+    contactEmail: String(item.contacto_email || '').trim(),
+    contactPhone: String(item.contacto_telefono || '').trim(),
+    title: String(item.titulo || '').trim(),
+    category: String(item.categoria || 'GENERAL').trim(),
+    priority: String(item.prioridad || 'MEDIA').trim().toUpperCase(),
+    status: String(item.estado || 'ABIERTO').trim().toUpperCase(),
+    createdByUsername: String(item.creado_por_usuario || '').trim(),
+    createdByName: String(item.creado_por_nombre || '').trim(),
+    createdAt: String(item.creado_en || '').trim(),
+    lastMessageAt: String(item.ultimo_mensaje_en || item.creado_en || '').trim(),
+    unreadCompany: Number(item.no_leidos_empresa || 0),
+    unreadInternal: Number(item.no_leidos_interno || 0)
+  };
+}
+
+function normalizeSupportMessageWeb_(item) {
+  return {
+    id: String(item.id || '').trim(),
+    ticketId: String(item.ticket_id || '').trim(),
+    authorScope: String(item.autor_scope || 'EMPRESA').trim().toUpperCase(),
+    authorUsername: String(item.autor_usuario || '').trim(),
+    authorName: String(item.autor_nombre || '').trim(),
+    message: String(item.mensaje || '').trim(),
+    createdAt: String(item.creado_en || '').trim()
+  };
+}
+
+function readSupportTicketsWeb_() {
+  return readSimpleItems_(getSupportTicketsSheet_()).map(normalizeSupportTicketWeb_);
+}
+
+function readSupportMessagesWeb_() {
+  return readSimpleItems_(getSupportMessagesSheet_()).map(normalizeSupportMessageWeb_);
+}
+
+function getSupportOverviewWeb_(payload) {
+  var isInternal = Boolean(payload && payload.isInternal);
+  var companyId = String(payload && payload.companyId || '').trim();
+  var tickets = readSupportTicketsWeb_().filter(function(ticket) {
+    return isInternal || !companyId || ticket.companyId === companyId;
+  }).sort(function(a, b) {
+    return new Date(b.lastMessageAt || b.createdAt || 0).getTime() - new Date(a.lastMessageAt || a.createdAt || 0).getTime();
+  });
+
+  return {
+    ok: true,
+    action: 'support_overview',
+    updated_at: new Date().toISOString(),
+    tickets: tickets,
+    unreadCompanyTotal: tickets.reduce(function(sum, ticket) { return sum + Number(ticket.unreadCompany || 0); }, 0),
+    unreadInternalTotal: tickets.reduce(function(sum, ticket) { return sum + Number(ticket.unreadInternal || 0); }, 0)
+  };
+}
+
+function getSupportThreadWeb_(ticketId) {
+  var normalizedTicketId = String(ticketId || '').trim();
+  var ticket = null;
+  readSupportTicketsWeb_().forEach(function(item) {
+    if (String(item.id) === normalizedTicketId) ticket = item;
+  });
+  if (!ticket) throw new Error('No se encontro el ticket de soporte.');
+
+  var messages = readSupportMessagesWeb_().filter(function(message) {
+    return String(message.ticketId) === normalizedTicketId;
+  });
+
+  return {
+    ok: true,
+    action: 'support_thread',
+    updated_at: new Date().toISOString(),
+    ticket: ticket,
+    messages: messages
+  };
+}
+
+function getNextSupportTicketCode_() {
+  var tickets = readSupportTicketsWeb_();
+  var maxNumber = 0;
+  tickets.forEach(function(ticket) {
+    var match = String(ticket.ticketCode || '').match(/SOP-(\d+)/i);
+    if (match) maxNumber = Math.max(maxNumber, Number(match[1]) || 0);
+  });
+  return 'SOP-' + ('00000' + (maxNumber + 1)).slice(-5);
+}
+
+function createSupportTicketWeb_(payload) {
+  var title = String(payload.title || '').trim();
+  var message = String(payload.message || '').trim();
+  if (!title) throw new Error('El asunto del ticket es obligatorio.');
+  if (!message) throw new Error('El mensaje del ticket es obligatorio.');
+
+  var now = new Date().toISOString();
+  var ticketId = Utilities.getUuid();
+  var ticket = {
+    id: ticketId,
+    ticket_code: getNextSupportTicketCode_(),
+    empresa_id: String(payload.companyId || '').trim(),
+    empresa_nombre: String(payload.companyName || 'Empresa').trim(),
+    licencia_codigo: String(payload.licenseCode || '').trim(),
+    contacto_nombre: String(payload.contactName || payload.createdByName || 'Usuario').trim(),
+    contacto_email: String(payload.contactEmail || '').trim(),
+    contacto_telefono: String(payload.contactPhone || '').trim(),
+    titulo: title,
+    categoria: String(payload.category || 'GENERAL').trim(),
+    prioridad: String(payload.priority || 'MEDIA').trim().toUpperCase(),
+    estado: 'ABIERTO',
+    creado_por_usuario: String(payload.createdByUsername || '').trim(),
+    creado_por_nombre: String(payload.createdByName || 'Usuario').trim(),
+    creado_en: now,
+    ultimo_mensaje_en: now,
+    no_leidos_empresa: 0,
+    no_leidos_interno: 1
+  };
+  writeSimpleRow_(getSupportTicketsSheet_(), SUPPORT_TICKET_HEADERS, -1, ticket);
+  writeSimpleRow_(getSupportMessagesSheet_(), SUPPORT_MESSAGE_HEADERS, -1, {
+    id: Utilities.getUuid(),
+    ticket_id: ticketId,
+    autor_scope: 'EMPRESA',
+    autor_usuario: ticket.creado_por_usuario,
+    autor_nombre: ticket.creado_por_nombre,
+    mensaje: message,
+    creado_en: now
+  });
+
+  return getSupportThreadWeb_(ticketId);
+}
+
+function updateSupportTicketRow_(ticketId, updater) {
+  var sheet = getSupportTicketsSheet_();
+  var items = readSimpleItems_(sheet);
+  var rowIndex = findSimpleRowIndex_(items, ticketId);
+  if (rowIndex < 0) throw new Error('No se encontro el ticket de soporte.');
+  var headers = getSheetHeaders_(sheet);
+  var current = rowToItem_(headers, sheet.getRange(rowIndex, 1, 1, headers.length).getValues()[0]);
+  var next = updater(current) || current;
+  writeSimpleRow_(sheet, headers, rowIndex, next);
+  return normalizeSupportTicketWeb_(next);
+}
+
+function sendSupportMessageWeb_(payload) {
+  var ticketId = String(payload.ticketId || payload.ticket_id || '').trim();
+  var message = String(payload.message || payload.mensaje || '').trim();
+  var authorScope = String(payload.authorScope || payload.autor_scope || 'EMPRESA').trim().toUpperCase();
+  if (!ticketId) throw new Error('Selecciona un ticket para responder.');
+  if (!message) throw new Error('Escribe un mensaje para enviar.');
+
+  var now = new Date().toISOString();
+  writeSimpleRow_(getSupportMessagesSheet_(), SUPPORT_MESSAGE_HEADERS, -1, {
+    id: Utilities.getUuid(),
+    ticket_id: ticketId,
+    autor_scope: authorScope,
+    autor_usuario: String(payload.authorUsername || payload.autor_usuario || '').trim(),
+    autor_nombre: String(payload.authorName || payload.autor_nombre || 'Usuario').trim(),
+    mensaje: message,
+    creado_en: now
+  });
+  updateSupportTicketRow_(ticketId, function(ticket) {
+    ticket.ultimo_mensaje_en = now;
+    if (authorScope === 'INTERNO') {
+      ticket.no_leidos_empresa = Number(ticket.no_leidos_empresa || 0) + 1;
+    } else {
+      ticket.no_leidos_interno = Number(ticket.no_leidos_interno || 0) + 1;
+    }
+    return ticket;
+  });
+  return getSupportThreadWeb_(ticketId);
+}
+
+function setSupportTicketStatusWeb_(ticketId, status) {
+  var normalizedStatus = String(status || 'ABIERTO').trim().toUpperCase();
+  updateSupportTicketRow_(ticketId, function(ticket) {
+    ticket.estado = normalizedStatus;
+    ticket.ultimo_mensaje_en = new Date().toISOString();
+    return ticket;
+  });
+  return getSupportThreadWeb_(ticketId);
+}
+
+function markSupportTicketReadWeb_(ticketId, readerScope) {
+  var scope = String(readerScope || 'EMPRESA').trim().toUpperCase();
+  updateSupportTicketRow_(ticketId, function(ticket) {
+    if (scope === 'INTERNO') ticket.no_leidos_interno = 0;
+    else ticket.no_leidos_empresa = 0;
+    return ticket;
+  });
+  return getSupportOverviewWeb_({});
 }
 
 function getNextNumericId_(items) {

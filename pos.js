@@ -570,11 +570,11 @@ function buildTicketHtml(sale) {
     .join("");
 
   return `
-    <div>
+    <div class="ticket-receipt">
       <div class="ticket-center">
         <h3>Farma POS</h3>
         <p class="ticket-muted">NIT 900.000.000-1</p>
-        <p class="ticket-muted">Ticket ${sale.ticketNumber}</p>
+        <p class="ticket-muted">Factura/Ticket ${sale.ticketNumber}</p>
         <p>${sale.date} ${sale.time}</p>
       </div>
       <hr>
@@ -595,6 +595,21 @@ function buildTicketHtml(sale) {
   `;
 }
 
+function generateSaleTicketNumber() {
+  const now = new Date();
+  const dateCode = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getDate()).padStart(2, "0")
+  ].join("");
+  const sequences = sales
+    .filter((sale) => String(sale.ticketNumber || "").includes(dateCode))
+    .map((sale) => Number(String(sale.ticketNumber || "").match(/(\d+)$/)?.[1] || 0))
+    .filter((sequence) => sequence > 0);
+  const nextSequence = sequences.length ? Math.max(...sequences) + 1 : 1;
+  return `FAC-${dateCode}-${String(nextSequence).padStart(6, "0")}`;
+}
+
 function openTicket(html) {
   ticketContent.innerHTML = html;
   ticketModal.hidden = false;
@@ -612,11 +627,13 @@ function printTicket(html) {
       <head>
         <title>Ticket Farma POS</title>
         <style>
-          body { font-family: Arial, sans-serif; padding: 20px; color: #111; }
+          body { font-family: "Courier New", monospace; padding: 14px; color: #172433; }
+          body > div { max-width: 310px; margin: 0 auto; border: 1px solid #d8e0ea; border-radius: 14px; padding: 14px; }
           .ticket-line, .ticket-total-line { display:flex; justify-content:space-between; gap:12px; margin:8px 0; }
           hr { border:0; border-top:1px dashed #999; margin:12px 0; }
           h3, p { margin:0 0 6px; }
           .ticket-center { text-align:center; }
+          .ticket-total-line:last-of-type { background:#172433; color:#fff; border-radius:10px; padding:9px; font-size:15px; }
         </style>
       </head>
       <body>${html}</body>
@@ -650,7 +667,7 @@ function finishSale() {
   const now = new Date();
   const sale = {
     id: crypto.randomUUID(),
-    ticketNumber: `T-${String(sales.length + 1).padStart(4, "0")}`,
+    ticketNumber: generateSaleTicketNumber(),
     clientName: currentClient?.name || "Cliente general",
     clientDocument: currentClient?.document || "",
     date: now.toLocaleDateString("es-CO"),

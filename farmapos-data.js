@@ -1,4 +1,4 @@
-﻿const STORAGE_KEYS = {
+const STORAGE_KEYS = {
   inventory: "farmapos_inventory",
   clients: "farmapos_clients",
   suppliers: "farmapos_suppliers",
@@ -31,8 +31,8 @@ const WEB_DB_API_STORAGE_KEY = "farmapos_web_db_api_url";
 const DAILY_WELCOME_STORAGE_KEY = "farmapos_daily_welcome_seen";
 const SESSION_WELCOME_STORAGE_KEY = "farmapos_session_welcome_seen";
 const DASHBOARD_LAUNCH_BANNER_STORAGE_KEY = "farmapos_dashboard_launch_banner_seen_v1";
-const INVENTORY_API_URL = "https://script.google.com/macros/s/AKfycbxY75zx5U2Z2DLaU2befiqNpYRu0GkiA3iGj4mxHSXnfbjEs35yMmpuhKVRA0Vil4Sq3g/exec";
-const API_URL = "https://script.google.com/macros/s/AKfycbxY75zx5U2Z2DLaU2befiqNpYRu0GkiA3iGj4mxHSXnfbjEs35yMmpuhKVRA0Vil4Sq3g/exec";
+const INVENTORY_API_URL = "https://script.google.com/macros/s/AKfycbx_4zP8LJcKvFpg_CtFTw8VfWdP-jBSABiRyJnxZ1V3Ix6MjuDmX9Pz6RL8Q2-7xUhP/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbx_4zP8LJcKvFpg_CtFTw8VfWdP-jBSABiRyJnxZ1V3Ix6MjuDmX9Pz6RL8Q2-7xUhP/exec";
 const desktopDb = window.farmaposDesktop?.db || null;
 const ONLINE_EXCEL_ONLY = true;
 const browserStorage = window.sessionStorage;
@@ -479,18 +479,35 @@ async function postExcelAction(action, payload = {}, timeoutMs = 15000) {
 }
 
 function applyWorkbookPayload(data = {}) {
+  const erroredSections = new Set(
+    Array.isArray(data.sync_errors)
+      ? data.sync_errors.map((entry) => String(entry.section || "").trim()).filter(Boolean)
+      : []
+  );
   const inventoryItems = data.inventory || data.items;
-  if (Array.isArray(inventoryItems)) state.inventory = inventoryItems.map(normalizeInventoryItem);
-  if (Array.isArray(data.sales)) state.sales = data.sales.map((entry, index) => normalizeSaleRecord(entry, index));
-  if (Array.isArray(data.clients)) state.clients = data.clients.map(normalizeClientRecord);
-  if (Array.isArray(data.suppliers)) state.suppliers = data.suppliers.map(normalizeSupplierRecord);
-  if (Array.isArray(data.purchases)) state.purchases = data.purchases.map(normalizePurchaseRecord);
-  if (Array.isArray(data.returns)) state.returns = data.returns.map(normalizeReturnRecord);
-  if (Array.isArray(data.promotions)) state.promotions = data.promotions.map(normalizePromotionRecord);
-  if (Array.isArray(data.auditLogs)) state.auditLogs = data.auditLogs.map(normalizeAuditLogRecord);
-  if (Array.isArray(data.withdrawals)) state.cashWithdrawals = data.withdrawals.map(normalizeCashWithdrawalRecord);
-  if (Array.isArray(data.closures)) state.cashClosures = data.closures.map((entry, index) => normalizeCashClosureRecord(entry, index));
-  if (data.profile && shouldAutoSyncSettingsProfile()) state.pharmacyProfile = normalizePharmacyProfile(data.profile);
+  if (Array.isArray(inventoryItems) && !erroredSections.has("inventory")) state.inventory = inventoryItems.map(normalizeInventoryItem);
+  if (Array.isArray(data.sales) && !erroredSections.has("sales")) state.sales = data.sales.map((entry, index) => normalizeSaleRecord(entry, index));
+  if (Array.isArray(data.clients) && !erroredSections.has("clients")) state.clients = data.clients.map(normalizeClientRecord);
+  if (Array.isArray(data.suppliers) && !erroredSections.has("suppliers")) state.suppliers = data.suppliers.map(normalizeSupplierRecord);
+  if (Array.isArray(data.purchases) && !erroredSections.has("purchases")) state.purchases = data.purchases.map(normalizePurchaseRecord);
+  if (Array.isArray(data.returns) && !erroredSections.has("returns")) state.returns = data.returns.map(normalizeReturnRecord);
+  if (Array.isArray(data.promotions) && !erroredSections.has("promotions")) state.promotions = data.promotions.map(normalizePromotionRecord);
+  if (Array.isArray(data.auditLogs) && !erroredSections.has("auditLogs")) state.auditLogs = data.auditLogs.map(normalizeAuditLogRecord);
+  if (Array.isArray(data.withdrawals) && !erroredSections.has("withdrawals")) state.cashWithdrawals = data.withdrawals.map(normalizeCashWithdrawalRecord);
+  if (Array.isArray(data.closures) && !erroredSections.has("closures")) state.cashClosures = data.closures.map((entry, index) => normalizeCashClosureRecord(entry, index));
+  if (data.profile && !erroredSections.has("profile") && shouldAutoSyncSettingsProfile()) state.pharmacyProfile = normalizePharmacyProfile(data.profile);
+  if (Array.isArray(data.sync_errors) && data.sync_errors.length) {
+    state.inventorySyncMeta = {
+      ...state.inventorySyncMeta,
+      source: INVENTORY_API_URL,
+      lastSyncAt: new Date().toISOString(),
+      updatedAt: data.updated_at || null,
+      total: state.inventory.length,
+      status: `Sincronizado con advertencias: ${data.sync_errors.map((entry) => entry.sheet || entry.section || "hoja").join(", ")}`
+    };
+    saveSyncMeta(state.inventorySyncMeta);
+    console.warn("Excel en linea devolvio advertencias de sincronizacion:", data.sync_errors);
+  }
   state.selectedClientId = state.clients.find((client) => client.id === state.selectedClientId && client.active !== "NO")?.id
     || state.clients.find((client) => client.active !== "NO")?.id
     || state.clients[0]?.id
@@ -713,7 +730,7 @@ function getDianTestResultSummary(result = state.dianTestResult) {
   } else if (normalized.generatedAt) {
     parts.push(`Generada ${formatSessionDateTime(normalized.generatedAt)}`);
   }
-  return parts.join(" Â· ");
+  return parts.join(" · ");
 }
 
 function buildDianTestInvoiceFromSale(sale, config = state.dianConfig) {
@@ -799,7 +816,7 @@ function getDianConfigSummary(config = state.dianConfig) {
     normalized.prefix || "Sin prefijo",
     normalized.softwareId ? "Software ID cargado" : "Sin Software ID"
   ];
-  return summary.join(" Â· ");
+  return summary.join(" · ");
 }
 
 function validateDianConfig(config = state.dianConfig) {
@@ -975,13 +992,13 @@ function setText(id, value) {
 
 function repairMojibake(value) {
   const text = String(value ?? "");
-  if (!text || !/[ÃƒÃ‚]/.test(text)) return text;
+  if (!text || !/[ÃÂ]/.test(text)) return text;
 
   try {
     const bytes = Uint8Array.from(Array.from(text, (char) => char.charCodeAt(0) & 0xff));
     const decoded = new TextDecoder("utf-8").decode(bytes);
-    const originalNoise = (text.match(/[ÃƒÃ‚ï¿½]/g) || []).length;
-    const decodedNoise = (decoded.match(/[ÃƒÃ‚ï¿½]/g) || []).length;
+    const originalNoise = (text.match(/[ÃÂ�]/g) || []).length;
+    const decodedNoise = (decoded.match(/[ÃÂ�]/g) || []).length;
     if (decoded && decodedNoise < originalNoise) {
       return decoded;
     }
@@ -1023,7 +1040,7 @@ function formatBackendRuntimeLabel(status) {
   if (!runtime?.backendFile) return "";
   const stamp = runtime.backendFileStamp ? formatSessionDateTime(runtime.backendFileStamp) : "";
   const helper = runtime.hasNormalizeDateTimeValue ? "helper ok" : "helper faltante";
-  return [helper, stamp].filter(Boolean).join(" Â· ");
+  return [helper, stamp].filter(Boolean).join(" · ");
 }
 
 async function renderSystemVersion() {
@@ -1536,6 +1553,41 @@ function formatDisplayDate(value) {
   return parsed.toLocaleDateString("es-CO");
 }
 
+function getTicketDateCode(value = new Date()) {
+  const rawText = String(value || "").trim();
+  const latinMatch = rawText.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (latinMatch) {
+    return `${latinMatch[3]}${latinMatch[2].padStart(2, "0")}${latinMatch[1].padStart(2, "0")}`;
+  }
+
+  const normalized = normalizeInputDateValue(value || new Date());
+  const compact = String(normalized || "").replace(/\D/g, "");
+  if (compact.length === 8) return compact;
+
+  const now = new Date();
+  return [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getDate()).padStart(2, "0")
+  ].join("");
+}
+
+function getSaleTicketSequence(ticketNumber) {
+  const text = String(ticketNumber || "").trim();
+  const match = text.match(/(\d+)$/);
+  return match ? Number(match[1]) || 0 : 0;
+}
+
+function generateSaleTicketNumber(dateValue = new Date(), sales = state.sales) {
+  const dateCode = getTicketDateCode(dateValue);
+  const matchingSequences = (Array.isArray(sales) ? sales : [])
+    .filter((sale) => String(sale?.ticketNumber || "").includes(dateCode))
+    .map((sale) => getSaleTicketSequence(sale?.ticketNumber))
+    .filter((sequence) => sequence > 0);
+  const nextSequence = matchingSequences.length ? Math.max(...matchingSequences) + 1 : 1;
+  return `FAC-${dateCode}-${String(nextSequence).padStart(6, "0")}`;
+}
+
 function getExpirationMeta(item) {
   if (!item?.expirationDate) return null;
 
@@ -1650,7 +1702,7 @@ function getCategoryLabel(category) {
     cabello: "Cabello",
     maquillaje: "Maquillaje",
     fragancias: "Fragancias",
-    analgesico: "AnalgÃ©sicos",
+    analgesico: "Analgésicos",
     vitamina: "Vitaminas",
     cuidado: "Cuidado",
     general: "General"
@@ -1711,12 +1763,42 @@ function renderProductVisual(item, options = {}) {
   return `<div class="${className} product-icon"><i class="bi ${getProductIcon(normalizeCategory(item?.category || item?.categoria))}"></i></div>`;
 }
 
+function parseNumericValue(value, fallback = 0) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : fallback;
+  if (value == null) return fallback;
+
+  const text = String(value).trim();
+  if (!text) return fallback;
+
+  const cleaned = text.replace(/[^\d,.-]/g, "");
+  if (!cleaned) return fallback;
+
+  const hasComma = cleaned.includes(",");
+  const hasDot = cleaned.includes(".");
+  let normalized = cleaned;
+
+  if (hasComma && hasDot) {
+    normalized = cleaned.lastIndexOf(",") > cleaned.lastIndexOf(".")
+      ? cleaned.replace(/\./g, "").replace(",", ".")
+      : cleaned.replace(/,/g, "");
+  } else if (hasComma) {
+    normalized = /^-?\d{1,3}(,\d{3})+$/.test(cleaned)
+      ? cleaned.replace(/,/g, "")
+      : cleaned.replace(",", ".");
+  } else if (hasDot && /^-?\d{1,3}(\.\d{3})+$/.test(cleaned)) {
+    normalized = cleaned.replace(/\./g, "");
+  }
+
+  const number = Number(normalized);
+  return Number.isFinite(number) ? number : fallback;
+}
+
 function normalizeInventoryItem(item, index) {
   const name = repairMojibake(item.nombre || item.name || "").trim();
   const sku = repairMojibake(item.sku || "").trim() || `NBM_${String(index + 1).padStart(2, "0")}`;
   const category = normalizeCategory(item.categoria || item.category);
-  const price = Number(item.precio ?? item.price ?? 0);
-  const stock = Number(item.stock ?? 0);
+  const price = parseNumericValue(item.precio ?? item.price ?? 0);
+  const stock = parseNumericValue(item.stock ?? 0);
   const batch = repairMojibake(item.lote || item.batch || "").trim();
   const expirationDate = normalizeInputDateValue(item.fecha_vencimiento || item.expirationDate || item.expiration_date || "");
   const laboratory = repairMojibake(item.laboratory || item.laboratorio || item.lab || "").trim();
@@ -1901,7 +1983,7 @@ const RELEASE_NOTES_ITEMS = [
 ];
 
 const state = {
-  inventory: loadData(STORAGE_KEYS.inventory, initialInventory),
+  inventory: loadData(STORAGE_KEYS.inventory, initialInventory).map(normalizeInventoryItem),
   clients: loadData(STORAGE_KEYS.clients, normalizedInitialClients).map(normalizeClientRecord),
   suppliers: loadData(STORAGE_KEYS.suppliers, initialSuppliers).map(normalizeSupplierRecord),
   purchases: loadData(STORAGE_KEYS.purchases, initialPurchases).map(normalizePurchaseRecord),
@@ -5148,12 +5230,13 @@ function normalizeCashTimeValue(value) {
 }
 
 function normalizeSaleRecord(sale, index) {
+  const normalizedDate = normalizeInputDateValue(sale?.date || "");
   return {
     id: String(sale?.id || crypto.randomUUID()).trim(),
-    ticketNumber: String(sale?.ticketNumber || `T-${String(index + 1).padStart(4, "0")}`).trim(),
+    ticketNumber: String(sale?.ticketNumber || generateSaleTicketNumber(normalizedDate || new Date(), state.sales)).trim(),
     clientName: String(sale?.clientName || "Cliente general").trim(),
     clientDocument: String(sale?.clientDocument || "").trim(),
-    date: normalizeInputDateValue(sale?.date || ""),
+    date: normalizedDate,
     time: String(sale?.time || "").trim(),
     paymentMethod: String(sale?.paymentMethod || "Efectivo").trim(),
     cashReceived: Number(sale?.cashReceived || 0),
@@ -5933,17 +6016,7 @@ function applySupportOverview(data) {
 }
 
 async function loadSupportOverviewFromApi() {
-  if (supportApiConfig.enabled) {
-    const overview = await fetchSupportApiJson("/tickets", { method: "GET" });
-    applySupportOverview(overview);
-    return overview;
-  }
-
-  if (!isDesktopDbEnabled()) {
-    throw new Error("El chat de soporte requiere la API central o la app desktop conectada a Excel en linea.");
-  }
-
-  const overview = await desktopDb.supportOverview({
+  const overview = await postExcelAction("support_overview", {
     companyId: getSupportCompanyIdentifier(),
     isInternal: isInternalSupportSession()
   });
@@ -5952,18 +6025,7 @@ async function loadSupportOverviewFromApi() {
 }
 
 async function loadSupportThreadFromApi(ticketId) {
-  if (supportApiConfig.enabled) {
-    const thread = await fetchSupportApiJson(`/tickets/${encodeURIComponent(String(ticketId || "").trim())}`, { method: "GET" });
-    state.supportSelectedTicketId = String(thread?.ticket?.id || "").trim();
-    state.supportMessages = Array.isArray(thread?.messages) ? thread.messages : [];
-    return thread;
-  }
-
-  if (!isDesktopDbEnabled()) {
-    throw new Error("El chat de soporte requiere la API central o la app desktop conectada a Excel en linea.");
-  }
-
-  const thread = await desktopDb.supportThread({
+  const thread = await postExcelAction("support_thread", {
     ticketId,
     companyId: getSupportCompanyIdentifier(),
     isInternal: isInternalSupportSession()
@@ -5974,17 +6036,7 @@ async function loadSupportThreadFromApi(ticketId) {
 }
 
 async function markSupportTicketReadInApi(ticketId) {
-  if (supportApiConfig.enabled) {
-    await fetchSupportApiJson(`/tickets/${encodeURIComponent(String(ticketId || "").trim())}/read`, {
-      method: "POST",
-      body: JSON.stringify({})
-    });
-    const overview = await loadSupportOverviewFromApi();
-    return overview;
-  }
-
-  if (!isDesktopDbEnabled()) return false;
-  await desktopDb.markSupportTicketRead({
+  await postExcelAction("support_mark_read", {
     ticketId,
     readerScope: getSupportScope()
   });
@@ -5993,32 +6045,13 @@ async function markSupportTicketReadInApi(ticketId) {
 }
 
 async function createSupportTicketInApi(payload) {
-  if (supportApiConfig.enabled) {
-    const response = await fetchSupportApiJson("/tickets", {
-      method: "POST",
-      body: JSON.stringify({
-        externalCompanyId: getSupportCompanyIdentifier(),
-        companyName: String(getCurrentLicenseState()?.companyName || state.pharmacyProfile.name || "Empresa BellezaPOS").trim(),
-        licenseCode: String(getCurrentLicenseState()?.code || "").trim(),
-        contactName: String(sessionState?.user || "").trim(),
-        contactEmail: String(state.pharmacyProfile.email || "").trim(),
-        contactPhone: String(state.pharmacyProfile.phone || "").trim(),
-        title: payload.title,
-        category: payload.category,
-        priority: payload.priority,
-        message: payload.message,
-        createdByUsername: sessionState?.username || "",
-        createdByName: sessionState?.user || "Usuario empresa"
-      })
-    });
-    const thread = await loadSupportThreadFromApi(response.ticketId);
-    await loadSupportOverviewFromApi();
-    await markSupportTicketReadInApi(response.ticketId);
-    return thread;
-  }
-
-  const thread = await desktopDb.createSupportTicket({
+  const thread = await postExcelAction("support_create_ticket", {
     companyId: getSupportCompanyIdentifier(),
+    companyName: String(getCurrentLicenseState()?.companyName || state.pharmacyProfile.name || "Empresa").trim(),
+    licenseCode: String(getCurrentLicenseState()?.code || "").trim(),
+    contactName: String(sessionState?.user || "").trim(),
+    contactEmail: String(state.pharmacyProfile.email || "").trim(),
+    contactPhone: String(state.pharmacyProfile.phone || "").trim(),
     title: payload.title,
     category: payload.category,
     priority: payload.priority,
@@ -6034,22 +6067,7 @@ async function createSupportTicketInApi(payload) {
 }
 
 async function sendSupportMessageInApi(ticketId, message) {
-  if (supportApiConfig.enabled) {
-    await fetchSupportApiJson(`/tickets/${encodeURIComponent(String(ticketId || "").trim())}/messages`, {
-      method: "POST",
-      body: JSON.stringify({
-        authorUsername: sessionState?.username || "",
-        authorName: sessionState?.user || "Usuario",
-        message
-      })
-    });
-    const thread = await loadSupportThreadFromApi(ticketId);
-    await loadSupportOverviewFromApi();
-    await markSupportTicketReadInApi(ticketId);
-    return thread;
-  }
-
-  const thread = await desktopDb.sendSupportMessage({
+  const thread = await postExcelAction("support_send_message", {
     ticketId,
     companyId: getSupportCompanyIdentifier(),
     authorScope: getSupportScope(),
@@ -6064,17 +6082,7 @@ async function sendSupportMessageInApi(ticketId, message) {
 }
 
 async function setSupportTicketStatusInApi(ticketId, status) {
-  if (supportApiConfig.enabled) {
-    await fetchSupportApiJson(`/tickets/${encodeURIComponent(String(ticketId || "").trim())}/status`, {
-      method: "POST",
-      body: JSON.stringify({ status })
-    });
-    const thread = await loadSupportThreadFromApi(ticketId);
-    await loadSupportOverviewFromApi();
-    return thread;
-  }
-
-  const thread = await desktopDb.setSupportTicketStatus({ ticketId, status });
+  const thread = await postExcelAction("support_set_status", { ticketId, status });
   await loadSupportOverviewFromApi();
   state.supportMessages = Array.isArray(thread?.messages) ? thread.messages : state.supportMessages;
   return thread;
@@ -6747,15 +6755,10 @@ async function saveClientRecord(client) {
   }
 
   const data = await postExcelAction("save_client", { client });
-  if (Array.isArray(data.clients)) {
-    state.clients = data.clients.map(normalizeClientRecord);
+  if (!Array.isArray(data.clients)) {
+    throw new Error("Excel en linea no confirmo la lista de clientes. Actualiza el Apps Script publicado.");
   }
-  const existingIndex = state.clients.findIndex((entry) => entry.id === client.id);
-  if (existingIndex >= 0) {
-    state.clients.splice(existingIndex, 1, normalizeClientRecord(client));
-  } else {
-    state.clients.push(normalizeClientRecord(client));
-  }
+  state.clients = data.clients.map(normalizeClientRecord);
   await addAuditLog({
     module: "clientes",
     action: isUpdating ? "actualizar" : "crear",
@@ -6773,12 +6776,10 @@ async function setClientActiveState(clientId, nextActive) {
   }
 
   const data = await postExcelAction("set_client_active", { id: clientId, active: nextActive });
-  if (Array.isArray(data.clients)) {
-    state.clients = data.clients.map(normalizeClientRecord);
-    return;
+  if (!Array.isArray(data.clients)) {
+    throw new Error("Excel en linea no confirmo el cambio del cliente. Actualiza el Apps Script publicado.");
   }
-  const client = state.clients.find((entry) => entry.id === clientId);
-  if (client) client.active = nextActive;
+  state.clients = data.clients.map(normalizeClientRecord);
 }
 
 async function deleteClientRecord(clientId) {
@@ -6797,18 +6798,10 @@ async function deleteClientRecord(clientId) {
   }
 
   const data = await postExcelAction("delete_client", { id: clientId });
-  if (Array.isArray(data.clients)) {
-    state.clients = data.clients.map(normalizeClientRecord);
-    await addAuditLog({
-      module: "clientes",
-      action: "borrar",
-      entityId: clientId,
-      entityName: client?.name || "Cliente",
-      detail: "Cliente eliminado"
-    });
-    return;
+  if (!Array.isArray(data.clients)) {
+    throw new Error("Excel en linea no confirmo la eliminacion del cliente. Actualiza el Apps Script publicado.");
   }
-  state.clients = state.clients.filter((entry) => entry.id !== clientId);
+  state.clients = data.clients.map(normalizeClientRecord);
   await addAuditLog({
     module: "clientes",
     action: "borrar",
@@ -6867,15 +6860,10 @@ async function saveSupplierRecord(supplier) {
   }
 
   const data = await postExcelAction("save_supplier", { supplier });
-  if (Array.isArray(data.suppliers)) {
-    state.suppliers = data.suppliers.map(normalizeSupplierRecord);
+  if (!Array.isArray(data.suppliers)) {
+    throw new Error("Excel en linea no confirmo la lista de proveedores. Actualiza el Apps Script publicado.");
   }
-  const existingIndex = state.suppliers.findIndex((entry) => entry.id === supplier.id);
-  if (existingIndex >= 0) {
-    state.suppliers.splice(existingIndex, 1, normalizeSupplierRecord(supplier));
-  } else {
-    state.suppliers.push(normalizeSupplierRecord(supplier));
-  }
+  state.suppliers = data.suppliers.map(normalizeSupplierRecord);
   await addAuditLog({
     module: "proveedores",
     action: isUpdating ? "actualizar" : "crear",
@@ -6893,12 +6881,10 @@ async function setSupplierActiveState(supplierId, nextActive) {
   }
 
   const data = await postExcelAction("set_supplier_active", { id: supplierId, active: nextActive });
-  if (Array.isArray(data.suppliers)) {
-    state.suppliers = data.suppliers.map(normalizeSupplierRecord);
-    return;
+  if (!Array.isArray(data.suppliers)) {
+    throw new Error("Excel en linea no confirmo el cambio del proveedor. Actualiza el Apps Script publicado.");
   }
-  const supplier = state.suppliers.find((entry) => entry.id === supplierId);
-  if (supplier) supplier.active = nextActive;
+  state.suppliers = data.suppliers.map(normalizeSupplierRecord);
 }
 
 async function deleteSupplierRecord(supplierId) {
@@ -6921,19 +6907,10 @@ async function deleteSupplierRecord(supplierId) {
   }
 
   const data = await postExcelAction("delete_supplier", { id: supplierId });
-  if (Array.isArray(data.suppliers)) {
-    state.suppliers = data.suppliers.map(normalizeSupplierRecord);
-    await addAuditLog({
-      module: "proveedores",
-      action: "borrar",
-      entityId: supplierId,
-      entityName: supplier?.name || "Proveedor",
-      detail: "Proveedor eliminado"
-    });
-    return;
+  if (!Array.isArray(data.suppliers)) {
+    throw new Error("Excel en linea no confirmo la eliminacion del proveedor. Actualiza el Apps Script publicado.");
   }
-
-  state.suppliers = state.suppliers.filter((entry) => entry.id !== supplierId);
+  state.suppliers = data.suppliers.map(normalizeSupplierRecord);
   await addAuditLog({
     module: "proveedores",
     action: "borrar",
@@ -7113,21 +7090,7 @@ async function registerPurchaseRecord(purchase) {
     });
     return;
   }
-
-  const normalizedPurchase = normalizePurchaseRecord(purchase);
-  state.purchases.unshift(normalizedPurchase);
-  const inventoryItem = state.inventory.find((entry) => entry.id === normalizedPurchase.inventoryItemId);
-    if (inventoryItem) {
-      inventoryItem.stock = Number(inventoryItem.stock || 0) + Number(normalizedPurchase.quantity || 0);
-      if (normalizedPurchase.batch) inventoryItem.batch = normalizedPurchase.batch;
-    }
-    await addAuditLog({
-      module: "compras",
-      action: "crear",
-      entityId: normalizedPurchase.id,
-      entityName: normalizedPurchase.productName,
-      detail: `Compra registrada a ${normalizedPurchase.supplierName} por ${normalizedPurchase.quantity} unidad(es)`
-    });
+  throw new Error("Excel en linea no confirmo la compra guardada. Actualiza el Apps Script publicado.");
   }
 
 function getReturnedQuantityForSaleItem(saleId, inventoryItemId, saleLineId = "") {
@@ -7227,32 +7190,7 @@ async function registerReturnRecord(returnEntry) {
     });
     return;
   }
-
-  const normalized = normalizeReturnRecord(returnEntry);
-  state.returns.unshift(normalized);
-
-  if (normalized.restock !== "NO") {
-    const inventoryItem = state.inventory.find((entry) => entry.id === normalized.inventoryItemId);
-    if (inventoryItem) {
-      inventoryItem.stock = Number(inventoryItem.stock || 0) + Number(normalized.quantity || 0);
-    }
-  }
-
-  const relatedSale = state.sales.find((sale) => sale.id === normalized.saleId);
-    if (relatedSale?.clientDocument) {
-    const client = state.clients.find((entry) => entry.document === relatedSale.clientDocument);
-    if (client) {
-      client.totalSpent = Math.max(0, Number(client.totalSpent || 0) - Number(normalized.total || 0));
-      client.points = Math.max(0, Number(client.points || 0) - calculateLoyaltyPointsFromTotal(normalized.total || 0));
-      }
-    }
-    await addAuditLog({
-      module: "devoluciones",
-      action: "crear",
-      entityId: normalized.id,
-      entityName: normalized.productName,
-      detail: `Devolucion registrada para ticket ${normalized.ticketNumber}`
-    });
+  throw new Error("Excel en linea no confirmo la devolucion guardada. Actualiza el Apps Script publicado.");
   }
 
 function renderPurchasesPage() {
@@ -7900,16 +7838,10 @@ function bindPromotionsEvents() {
 
       try {
         const data = await postExcelAction("save_promotion", { promotion });
-        if (Array.isArray(data.promotions)) {
-          state.promotions = data.promotions.map(normalizePromotionRecord);
-        } else {
-          const index = state.promotions.findIndex((entry) => entry.id === promotion.id);
-          if (index >= 0) {
-            state.promotions.splice(index, 1, promotion);
-          } else {
-            state.promotions.unshift(promotion);
-          }
+        if (!Array.isArray(data.promotions)) {
+          throw new Error("Excel en linea no confirmo la lista de promociones. Actualiza el Apps Script publicado.");
         }
+        state.promotions = data.promotions.map(normalizePromotionRecord);
       } catch (error) {
         showInfoDialog(error.message || "No fue posible guardar la promocion en Excel en linea.", { title: "Error de base de datos", variant: "danger" });
         return;
@@ -7952,7 +7884,10 @@ function bindPromotionsEvents() {
         const nextActive = promotion.active === "NO" ? "SI" : "NO";
         try {
           const data = await postExcelAction("set_promotion_active", { id: promotion.id, active: nextActive });
-          state.promotions = Array.isArray(data.promotions) ? data.promotions.map(normalizePromotionRecord) : state.promotions;
+          if (!Array.isArray(data.promotions)) {
+            throw new Error("Excel en linea no confirmo el cambio de la promocion. Actualiza el Apps Script publicado.");
+          }
+          state.promotions = data.promotions.map(normalizePromotionRecord);
         } catch (error) {
           showInfoDialog(error.message || "No fue posible actualizar la promocion.", { title: "Error de base de datos", variant: "danger" });
           return;
@@ -7964,7 +7899,10 @@ function bindPromotionsEvents() {
       if (button.dataset.promotionAction === "delete") {
         try {
           const data = await postExcelAction("delete_promotion", { id: promotion.id });
-          state.promotions = Array.isArray(data.promotions) ? data.promotions.map(normalizePromotionRecord) : state.promotions.filter((entry) => entry.id !== promotion.id);
+          if (!Array.isArray(data.promotions)) {
+            throw new Error("Excel en linea no confirmo la eliminacion de la promocion. Actualiza el Apps Script publicado.");
+          }
+          state.promotions = data.promotions.map(normalizePromotionRecord);
         } catch (error) {
           showInfoDialog(error.message || "No fue posible borrar la promocion.", { title: "Error de base de datos", variant: "danger" });
           return;
@@ -9210,14 +9148,8 @@ async function syncAdminRealtimeState() {
 }
 
 async function syncSupportRealtimeState() {
-  if (!isDesktopDbEnabled()) return false;
-
   try {
-    const overview = await desktopDb.supportOverview({
-      companyId: getSupportCompanyIdentifier(),
-      isInternal: isInternalSupportSession()
-    });
-    applySupportOverview(overview);
+    await loadSupportOverviewFromApi();
     if (!state.supportSelectedTicketId && state.supportTickets[0]?.id) {
       await loadSupportThreadFromApi(state.supportTickets[0].id);
       await markSupportTicketReadInApi(state.supportTickets[0].id);
@@ -9493,7 +9425,7 @@ function renderSupportPage() {
   const updateStatusButton = document.getElementById("supportUpdateStatusButton");
   const newTicketButton = document.getElementById("supportNewTicketButton");
   if (newTicketButton) {
-    newTicketButton.hidden = isInternalSupportSession();
+    newTicketButton.hidden = false;
   }
   if (statusSelect) {
     statusSelect.hidden = !(isInternalSupportSession() && selectedTicket);
@@ -9505,7 +9437,7 @@ function renderSupportPage() {
 
   const createCard = document.getElementById("supportTicketCreateCard");
   if (createCard) {
-    createCard.hidden = isInternalSupportSession() || Boolean(selectedTicket);
+    createCard.hidden = Boolean(selectedTicket);
   }
 
   const replyInput = document.getElementById("supportReplyInput");
@@ -9559,11 +9491,21 @@ function bindSupportEvents() {
 
   document.getElementById("supportCreateTicketButton")?.addEventListener("click", async () => {
     const payload = {
-      title: document.getElementById("supportTicketTitleInput")?.value || "",
-      category: document.getElementById("supportTicketCategoryInput")?.value || "GENERAL",
+      title: String(document.getElementById("supportTicketTitleInput")?.value || "").trim(),
+      category: String(document.getElementById("supportTicketCategoryInput")?.value || "GENERAL").trim() || "GENERAL",
       priority: document.getElementById("supportTicketPriorityInput")?.value || "MEDIA",
-      message: document.getElementById("supportTicketMessageInput")?.value || ""
+      message: String(document.getElementById("supportTicketMessageInput")?.value || "").trim()
     };
+
+    if (!payload.title) {
+      await showInfoDialog("Escribe el asunto del ticket.", { title: "Soporte", variant: "warn" });
+      return;
+    }
+
+    if (!payload.message) {
+      await showInfoDialog("Describe la solicitud antes de crear el ticket.", { title: "Soporte", variant: "warn" });
+      return;
+    }
 
     try {
       await withLoading(async () => {
@@ -9922,7 +9864,13 @@ function renderCart() {
 
   const pricing = getCartPricing();
   const { items } = pricing;
+  const itemUnits = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
   cartList.innerHTML = "";
+  setText("salesCartCount", String(itemUnits));
+  setText("salesItemCount", `${itemUnits} producto${itemUnits === 1 ? "" : "s"}`);
+  setText("salesFooterTotal", formatCurrency(pricing.total || 0));
+  setText("activeSaleDate", formatSessionDateTime(new Date().toISOString()));
+  setText("activeSaleCode", generateSaleTicketNumber(new Date()));
 
     if (!items.length) {
       if (emptyCart) cartList.appendChild(emptyCart);
@@ -9934,6 +9882,7 @@ function renderCart() {
     const redeemInput = document.getElementById("redeemPointsInput");
     if (redeemInput) redeemInput.value = "0";
     setText("totalValue", formatCurrency(0));
+    setText("salesFooterTotal", formatCurrency(0));
     setText("changeValue", formatCurrency(0));
     return;
   }
@@ -9942,25 +9891,24 @@ function renderCart() {
     const article = document.createElement("article");
     article.className = "cart-item";
     article.innerHTML = `
-      <div class="cart-item-row">
-        <div class="cart-item-main">
+      <div class="cart-item-product">
           ${renderProductVisual(item, { className: "cart-item-thumb" })}
           <div>
             <strong>${escapeHtml(item.name)}</strong>
             <span>${formatCurrency(item.price)} c/u</span>
             ${item.promotionName && item.promoDiscount ? `<span>Promo ${escapeHtml(item.promotionName)}: -${formatCurrency(item.promoDiscount)}</span>` : ""}
           </div>
-        </div>
-        <button class="icon-action remove-item" type="button" data-id="${escapeHtml(item.id)}"><i class="bi bi-x-lg"></i></button>
       </div>
-      <div class="cart-item-row mt-3">
-        <div class="qty-box">
-          <button class="qty-btn decrease-item" type="button" data-id="${escapeHtml(item.id)}">-</button>
-          <strong>${item.quantity}</strong>
-          <button class="qty-btn increase-item" type="button" data-id="${escapeHtml(item.id)}">+</button>
-        </div>
-        <strong>${formatCurrency(item.lineTotal)}</strong>
+      <span class="cart-item-code">${escapeHtml(item.sku || item.id || "-")}</span>
+      <div class="qty-box">
+        <button class="qty-btn decrease-item" type="button" data-id="${escapeHtml(item.id)}">-</button>
+        <strong>${item.quantity}</strong>
+        <button class="qty-btn increase-item" type="button" data-id="${escapeHtml(item.id)}">+</button>
       </div>
+      <strong class="cart-item-price">${formatCurrency(item.price)}</strong>
+      <span class="cart-item-discount">${item.promoDiscount ? formatCurrency(item.promoDiscount) : "0%"}</span>
+      <strong class="cart-item-subtotal">${formatCurrency(item.lineTotal)}</strong>
+      <button class="icon-action remove-item" type="button" data-id="${escapeHtml(item.id)}"><i class="bi bi-trash3"></i></button>
     `;
     cartList.appendChild(article);
   });
@@ -9978,6 +9926,7 @@ function renderCart() {
     redeemInput.disabled = !pricing.availablePoints;
   }
   setText("totalValue", formatCurrency(pricing.total));
+  setText("salesFooterTotal", formatCurrency(pricing.total));
   bindCartActions();
   updateChange();
 }
@@ -10050,6 +9999,7 @@ function addToCart(card) {
     state.cart.set(id, {
       id,
       name: inventoryItem.name,
+      sku: inventoryItem.sku || "",
       price: inventoryItem.price,
       imageUrl: inventoryItem.imageUrl || "",
       category: inventoryItem.category,
@@ -10073,7 +10023,7 @@ function buildTicketQrPayload(sale) {
   return [
     `Empresa: ${pharmacy.name || "Sistema Facturacion"}`,
     `Ticket: ${sale.ticketNumber || sale.id || ""}`,
-    `Estado: ${isAnnulled ? "ANULADA" : "ACTIVA"}`,
+    isAnnulled ? "Estado: ANULADA" : "",
     `Fecha: ${sale.date || ""} ${sale.time || ""}`.trim(),
     `Cliente: ${sale.clientName || "Cliente general"}`,
     `Documento: ${sale.clientDocument || "Consumidor final"}`,
@@ -10117,7 +10067,7 @@ function buildTicketHtml(sale) {
   return `
     <section class="ticket-receipt">
       <div class="ticket-watermark ${isAnnulled ? "is-annulled" : ""}">
-        <strong>${escapeHtml(isAnnulled ? "TICKET ANULADO" : (pharmacy.name || "Sistema Facturacion").toUpperCase())}</strong>
+        <strong>${escapeHtml(isAnnulled ? "TICKET ANULADO" : "COMPROBANTE")}</strong>
         <span>${escapeHtml(isAnnulled ? "VENTA REVERSADA" : "VENTA DIGITAL")}</span>
       </div>
       <header class="ticket-brand">
@@ -10128,13 +10078,13 @@ function buildTicketHtml(sale) {
           ${pharmacyLocation ? `<p class="ticket-muted ticket-pharmacy-line">${escapeHtml(pharmacyLocation)}</p>` : ""}
           ${pharmacyContact ? `<p class="ticket-muted ticket-pharmacy-line">${escapeHtml(pharmacyContact)}</p>` : ""}
           <p class="ticket-muted">${escapeHtml(isAnnulled ? "Comprobante de venta anulada" : "Comprobante de venta")}</p>
-          <span class="ticket-status-pill ${isAnnulled ? "is-annulled" : "is-active"}">${escapeHtml(isAnnulled ? "Estado: ANULADA" : "Estado: ACTIVA")}</span>
+          ${isAnnulled ? `<span class="ticket-status-pill is-annulled">Estado: ANULADA</span>` : ""}
         </div>
       </header>
 
       <section class="ticket-meta-grid">
         <div class="ticket-meta-card">
-          <span>Ticket</span>
+          <span>No. factura/ticket</span>
           <strong>${escapeHtml(sale.ticketNumber)}</strong>
         </div>
         <div class="ticket-meta-card">
@@ -10145,10 +10095,10 @@ function buildTicketHtml(sale) {
           <span>Hora</span>
           <strong>${escapeHtml(sale.time)}</strong>
         </div>
-        <div class="ticket-meta-card">
+        ${isAnnulled ? `<div class="ticket-meta-card">
           <span>Estado</span>
-          <strong>${escapeHtml(isAnnulled ? "ANULADA" : "ACTIVA")}</strong>
-        </div>
+          <strong>ANULADA</strong>
+        </div>` : ""}
       </section>
 
       <section class="ticket-block">
@@ -10179,14 +10129,14 @@ function buildTicketHtml(sale) {
       <section class="ticket-qr-block">
         <img class="ticket-qr-image" src="${escapeHtml(qrUrl)}" alt="${escapeHtml(isAnnulled ? "QR con resumen de la venta anulada" : "QR con resumen de la venta")}">
         <div class="ticket-qr-copy">
-          <strong>${escapeHtml(isAnnulled ? "Ticket anulado" : "Venta digital")}</strong>
-          <span>${escapeHtml(isAnnulled ? "El resumen QR indica que este comprobante fue anulado." : "Escanea para ver el resumen de este comprobante.")}</span>
+          <strong>${escapeHtml(isAnnulled ? "Ticket anulado" : "Comprobante digital")}</strong>
+          <span>${escapeHtml(isAnnulled ? "El resumen QR indica que este comprobante fue anulado." : "Escanea para validar el resumen de la compra.")}</span>
         </div>
       </section>
 
       <footer class="ticket-footer">
         <p>${escapeHtml(isAnnulled ? "Venta anulada correctamente." : "Gracias por su compra.")}</p>
-        <p class="ticket-muted">${escapeHtml(isAnnulled ? "Este comprobante ya no representa una venta activa." : "Conserve este comprobante para cambios o seguimiento.")}</p>
+        <p class="ticket-muted">${escapeHtml(isAnnulled ? "Este comprobante corresponde a una venta anulada." : "Conserve este comprobante para cambios o seguimiento.")}</p>
         <p class="ticket-soft-signature">Software desarrollado en Colombia</p>
         <p class="ticket-soft-contact">Soporte 24/7: 3127947484</p>
       </footer>
@@ -10224,10 +10174,11 @@ function buildTicketPrintableDocument(ticketHtml, title = "") {
       <title>${escapeHtml(title || `Ticket ${state.sales[state.sales.length - 1]?.ticketNumber || ""}`)}</title>
       <style>
         :root {
-          --text: #193040;
-          --muted: #718295;
-          --border: rgba(25, 48, 64, 0.18);
-          --primary: #ff6a3d;
+          --text: #172433;
+          --muted: #687789;
+          --border: rgba(23, 36, 51, 0.2);
+          --primary: #0f6bff;
+          --accent: #ff6a3d;
         }
         * { box-sizing: border-box; }
         html, body {
@@ -10246,17 +10197,18 @@ function buildTicketPrintableDocument(ticketHtml, title = "") {
         .ticket-paper {
           position: relative;
           overflow: hidden;
-          width: 302px;
-          padding: 12px 13px;
-          border: 1px dashed var(--border);
-          border-radius: 14px;
+          width: 310px;
+          padding: 14px 14px 12px;
+          border: 1px solid rgba(23, 36, 51, 0.12);
+          border-radius: 16px;
           background: #fff;
           font-size: 11px;
+          box-shadow: 0 14px 35px rgba(23, 36, 51, 0.08);
         }
         .ticket-receipt {
           position: relative;
           display: grid;
-          gap: 10px;
+          gap: 11px;
         }
         .ticket-watermark {
           position: absolute;
@@ -10283,7 +10235,7 @@ function buildTicketPrintableDocument(ticketHtml, title = "") {
           font-weight: 700;
           letter-spacing: .32em;
           text-transform: uppercase;
-          color: rgba(255, 106, 61, .12);
+          color: rgba(15, 107, 255, .1);
         }
         .ticket-watermark.is-annulled strong {
           color: rgba(190, 38, 55, .16);
@@ -10296,8 +10248,8 @@ function buildTicketPrintableDocument(ticketHtml, title = "") {
           justify-items: center;
           gap: 8px;
           text-align: center;
-          padding-bottom: 8px;
-          border-bottom: 1px dashed var(--border);
+          padding: 4px 0 10px;
+          border-bottom: 2px solid rgba(15, 107, 255, .16);
         }
         .ticket-brand-mark {
           display: inline-flex;
@@ -10308,7 +10260,7 @@ function buildTicketPrintableDocument(ticketHtml, title = "") {
           overflow: hidden;
           border-radius: 16px;
           color: #fff;
-          background: linear-gradient(135deg, #132c43, var(--primary));
+          background: linear-gradient(135deg, var(--primary), var(--accent));
           font-family: sans-serif;
           font-weight: 800;
         }
@@ -10350,13 +10302,14 @@ function buildTicketPrintableDocument(ticketHtml, title = "") {
         }
         .ticket-meta-grid {
           display: grid;
-          grid-template-columns: repeat(4, minmax(0,1fr));
-          gap: 5px;
+          grid-template-columns: repeat(3, minmax(0,1fr));
+          gap: 6px;
         }
         .ticket-meta-card {
-          padding: 7px 5px;
-          border-radius: 9px;
-          background: rgba(25,48,64,.05);
+          padding: 8px 5px;
+          border-radius: 10px;
+          background: rgba(15,107,255,.07);
+          border: 1px solid rgba(15,107,255,.12);
           text-align: center;
           font-family: sans-serif;
         }
@@ -10373,8 +10326,8 @@ function buildTicketPrintableDocument(ticketHtml, title = "") {
         .ticket-block,
         .ticket-totals {
           display: grid;
-          gap: 5px;
-          padding: 8px 0;
+          gap: 6px;
+          padding: 9px 0;
           border-top: 1px dashed var(--border);
           border-bottom: 1px dashed var(--border);
         }
@@ -10413,9 +10366,12 @@ function buildTicketPrintableDocument(ticketHtml, title = "") {
         }
         .ticket-total {
           margin-top: 4px;
-          padding-top: 7px;
-          border-top: 1px dashed var(--border);
-          font-size: 13px;
+          padding: 8px 9px;
+          border-top: 0;
+          border-radius: 11px;
+          background: #172433;
+          color: #fff;
+          font-size: 14px;
           font-weight: 800;
         }
         .ticket-footer {
@@ -10446,11 +10402,11 @@ function buildTicketPrintableDocument(ticketHtml, title = "") {
           border-top: 1px dashed var(--border);
         }
         .ticket-qr-image {
-          width: 104px;
-          height: 104px;
+          width: 98px;
+          height: 98px;
           object-fit: contain;
           padding: 6px;
-          border-radius: 12px;
+          border-radius: 10px;
           background: #fff;
           border: 1px solid rgba(25,48,64,.12);
         }
@@ -10638,22 +10594,10 @@ async function finishSale() {
       message: "Actualizando inventario y registrando la venta..."
     });
   } catch (error) {
-    if (!inventoryUpdated) {
-      showInfoDialog(`No se pudo actualizar el inventario en ${getPersistenceBackendLabel()}. ${error.message}`, { title: "Error de sincronizacion", variant: "danger" });
-      return;
-    }
-
-    const fallbackSale = {
-      ...draftSale,
-      ticketNumber: `LOCAL-${Date.now()}`
-    };
-    state.sales.push(fallbackSale);
-    state.lastTicketHtml = buildTicketHtml(fallbackSale);
-    saveData();
-    resetSaleFlow();
-    renderInventory();
-    openTicket(state.lastTicketHtml);
-    showInfoDialog(`El stock se actualizo en ${getPersistenceBackendLabel()}, pero no se pudo registrar la venta completa. Se guardo una copia local temporal. ${error.message}`, { title: "Venta guardada localmente", variant: "warn" });
+    const detail = inventoryUpdated
+      ? "El stock pudo haberse actualizado, pero la venta no quedo registrada. Revisa Excel en linea antes de intentar de nuevo."
+      : "No se actualizo el inventario ni se registro la venta.";
+    showInfoDialog(`${detail} ${error.message}`, { title: "Error de Excel en linea", variant: "danger" });
     return;
   }
 
@@ -10713,10 +10657,14 @@ function bindSalesEvents() {
   });
 
   document.getElementById("salesSearchInput")?.addEventListener("input", (event) => {
+    const quickSearch = document.getElementById("salesQuickSearchInput");
+    if (quickSearch && quickSearch.value !== event.target.value) {
+      quickSearch.value = event.target.value || "";
+    }
     renderProductGrid(getActiveSalesFilter(), event.target.value || "");
   });
 
-  document.getElementById("salesSearchInput")?.addEventListener("keydown", (event) => {
+  const handleSalesSearchEnter = (event) => {
     if (event.key !== "Enter") return;
 
     event.preventDefault();
@@ -10732,8 +10680,22 @@ function bindSalesEvents() {
 
     addInventoryItemToCartById(matchedItem.id);
     event.target.value = "";
+    const mainSearchInput = document.getElementById("salesSearchInput");
+    const quickSearchInput = document.getElementById("salesQuickSearchInput");
+    if (mainSearchInput) mainSearchInput.value = "";
+    if (quickSearchInput) quickSearchInput.value = "";
     renderProductGrid(getActiveSalesFilter(), "");
+  };
+
+  document.getElementById("salesSearchInput")?.addEventListener("keydown", handleSalesSearchEnter);
+  document.getElementById("salesQuickSearchInput")?.addEventListener("input", (event) => {
+    const mainSearch = document.getElementById("salesSearchInput");
+    if (mainSearch && mainSearch.value !== event.target.value) {
+      mainSearch.value = event.target.value || "";
+    }
+    renderProductGrid(getActiveSalesFilter(), event.target.value || "");
   });
+  document.getElementById("salesQuickSearchInput")?.addEventListener("keydown", handleSalesSearchEnter);
 
   requestAnimationFrame(() => {
     document.getElementById("salesSearchInput")?.focus();
@@ -11651,7 +11613,10 @@ async function syncInventoryFromApi() {
     }
 
     applyWorkbookPayload(data);
-    applyRemoteInventoryState(data.items || data.inventory, data.updated_at || null);
+    const hasSyncErrors = Array.isArray(data.sync_errors) && data.sync_errors.length > 0;
+    if (!hasSyncErrors) {
+      applyRemoteInventoryState(data.items || data.inventory, data.updated_at || null);
+    }
     return true;
   } catch (error) {
     state.inventorySyncMeta = {
