@@ -31,8 +31,8 @@ const WEB_DB_API_STORAGE_KEY = "farmapos_web_db_api_url";
 const DAILY_WELCOME_STORAGE_KEY = "farmapos_daily_welcome_seen";
 const SESSION_WELCOME_STORAGE_KEY = "farmapos_session_welcome_seen";
 const DASHBOARD_LAUNCH_BANNER_STORAGE_KEY = "farmapos_dashboard_launch_banner_seen_v1";
-const INVENTORY_API_URL = "https://script.google.com/macros/s/AKfycbwXHqOK2r6XEatDnIbiS3F4-sRSzjUHX88fTkkRocEr9LAQ66AnWu6lu0u3C1Grmg1LfA/exec";
-const API_URL = "https://script.google.com/macros/s/AKfycbwXHqOK2r6XEatDnIbiS3F4-sRSzjUHX88fTkkRocEr9LAQ66AnWu6lu0u3C1Grmg1LfA/exec";
+const INVENTORY_API_URL = "https://script.google.com/macros/s/AKfycbwbBzdjN06VAuUl_iw8o6VTtM0CauEeQcE_883vDseVe9nJ92mM-AYzG2kPMAd3qXN0sw/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbwbBzdjN06VAuUl_iw8o6VTtM0CauEeQcE_883vDseVe9nJ92mM-AYzG2kPMAd3qXN0sw/exec";
 const desktopDb = window.farmaposDesktop?.db || null;
 const ONLINE_EXCEL_ONLY = true;
 const browserStorage = window.sessionStorage;
@@ -1187,6 +1187,74 @@ function showAppToast(message, options = {}) {
     toast.classList.add("is-leaving");
     window.setTimeout(() => toast.remove(), 220);
   }, Number(options.duration || 2400));
+}
+
+function showSystemUpdateNotification(message, options = {}) {
+  showAppToast(message, {
+    title: options.title || "Actualizacion del sistema",
+    variant: options.variant || "info",
+    duration: options.duration || 5200
+  });
+}
+
+async function fetchSystemUpdateNotification() {
+  try {
+    const url = `${INVENTORY_API_URL}?mode=system_update`;
+    const response = await fetchJsonWithTimeout(url, {
+      method: "GET",
+      headers: {
+        Accept: "application/json"
+      }
+    });
+
+    if (!response?.ok) {
+      return "";
+    }
+
+    return String(response.message || "").trim();
+  } catch {
+    return "";
+  }
+}
+
+async function maybeShowPendingSystemUpdateNotification() {
+  try {
+    const message = await fetchSystemUpdateNotification();
+    if (!message) return;
+
+    showSystemUpdateNotification(message, {
+      title: "Actualizacion del sistema",
+      variant: "info",
+      duration: 6200
+    });
+  } catch {
+    // Ignoramos fallos al consultar la actualizacion del sistema.
+  }
+}
+
+async function sendSystemUpdateNotification() {
+  const message = String(document.getElementById("systemUpdateNotificationMessage")?.value || "").trim();
+  if (!message) {
+    showInfoDialog("Escribe el mensaje de actualizacion antes de enviarlo.", {
+      title: "Mensaje requerido",
+      variant: "warn"
+    });
+    return;
+  }
+
+  try {
+    await postExcelAction("save_system_update", { message });
+    showSystemUpdateNotification(message, {
+      title: "Notificacion enviada",
+      variant: "success",
+      duration: 5200
+    });
+  } catch (error) {
+    showInfoDialog(error?.message || "No fue posible guardar la notificacion.", {
+      title: "Error",
+      variant: "danger"
+    });
+  }
 }
 
 function getCurrentAppDateStamp() {
@@ -11092,6 +11160,10 @@ function bindSettingsEvents() {
     );
   });
 
+  document.getElementById("sendSystemUpdateNotificationButton")?.addEventListener("click", () => {
+    sendSystemUpdateNotification();
+  });
+
   document.getElementById("pharmacyLogoFile")?.addEventListener("change", async (event) => {
     if (!canEditCompanyProfile()) {
       event.target.value = "";
@@ -11728,6 +11800,7 @@ function rerenderCurrentPage() {
 function initializePage() {
   const page = document.body.dataset.page;
   ensureFeedbackUi();
+  maybeShowPendingSystemUpdateNotification();
   renderSessionInfo();
   ensureReleaseNotesCenter();
   renderTopbarSystemStatus();

@@ -131,6 +131,16 @@ function doGet(e) {
       });
     }
 
+    if (mode === 'system_update') {
+      var settingsSheet = getSettingsSheet_();
+      return jsonResponse_({
+        ok: true,
+        mode: 'system_update',
+        updated_at: new Date().toISOString(),
+        message: getSetting_(settingsSheet, 'system_update_message')
+      });
+    }
+
     if (mode === 'all') {
       return jsonResponse_(buildFullWorkbookState_('all'));
     }
@@ -214,6 +224,22 @@ function doPost(e) {
         action: 'licensing_overview',
         updated_at: new Date().toISOString(),
         overview: getLicensingOverviewWeb_()
+      });
+    }
+
+    if (action === 'save_system_update') {
+      var settingsSheet = getSettingsSheet_();
+      var message = String(payload.message || '').trim();
+      if (!message) {
+        throw new Error('El mensaje de actualización del sistema no puede estar vacío.');
+      }
+
+      var savedMessage = saveSetting_(settingsSheet, 'system_update_message', message);
+      return jsonResponse_({
+        ok: true,
+        action: 'save_system_update',
+        updated_at: new Date().toISOString(),
+        message: savedMessage
       });
     }
 
@@ -1009,6 +1035,45 @@ function ensureSettingsHeaders_(sheet) {
   }
 }
 
+function readSettings_(sheet) {
+  var values = sheet.getDataRange().getValues();
+  if (values.length < 2) return {};
+
+  var settings = {};
+  for (var i = 1; i < values.length; i += 1) {
+    var key = String(values[i][0] || '').trim();
+    if (!key) continue;
+    settings[key] = String(values[i][1] || '').trim();
+  }
+  return settings;
+}
+
+function getSetting_(sheet, key) {
+  var cleanedKey = String(key || '').trim();
+  if (!cleanedKey) return '';
+  var settings = readSettings_(sheet);
+  return settings[cleanedKey] || '';
+}
+
+function saveSetting_(sheet, key, value) {
+  var cleanedKey = String(key || '').trim();
+  if (!cleanedKey) {
+    throw new Error('La clave de configuración es obligatoria.');
+  }
+
+  var settings = readSettings_(sheet);
+  settings[cleanedKey] = String(value || '').trim();
+
+  var rows = [SETTINGS_HEADERS];
+  Object.keys(settings).forEach(function(settingKey) {
+    rows.push([settingKey, settings[settingKey] || '']);
+  });
+
+  sheet.clearContents();
+  sheet.getRange(1, 1, rows.length, SETTINGS_HEADERS.length).setValues(rows);
+  return settings[cleanedKey];
+}
+
 function readInventoryItems_(sheet) {
   var values = sheet.getDataRange().getValues();
   if (values.length < 2) return [];
@@ -1393,10 +1458,21 @@ function readCompanyProfile_(sheet) {
 
 function saveCompanyProfile_(sheet, profile) {
   var normalized = normalizeCompanyProfile_(profile);
-  var rows = [SETTINGS_HEADERS];
+  var settings = readSettings_(sheet);
 
   COMPANY_PROFILE_KEYS.forEach(function(key) {
-    rows.push([key, normalized[key] || '']);
+    settings[key] = normalized[key] || '';
+  });
+
+  var rows = [SETTINGS_HEADERS];
+  COMPANY_PROFILE_KEYS.forEach(function(key) {
+    rows.push([key, settings[key] || '']);
+  });
+
+  Object.keys(settings).forEach(function(settingKey) {
+    if (COMPANY_PROFILE_KEYS.indexOf(settingKey) < 0) {
+      rows.push([settingKey, settings[settingKey] || '']);
+    }
   });
 
   sheet.clearContents();

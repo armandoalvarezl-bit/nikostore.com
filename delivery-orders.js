@@ -1,4 +1,4 @@
-const DELIVERY_API_URL = "https://script.google.com/macros/s/AKfycbwXHqOK2r6XEatDnIbiS3F4-sRSzjUHX88fTkkRocEr9LAQ66AnWu6lu0u3C1Grmg1LfA/exec";
+const DELIVERY_API_URL = "https://script.google.com/macros/s/AKfycbwbBzdjN06VAuUl_iw8o6VTtM0CauEeQcE_883vDseVe9nJ92mM-AYzG2kPMAd3qXN0sw/exec";
 const DELIVERY_TAX_RATE = 0.19;
 const DELIVERY_ORDER_STATUS_KEY = "farmapos_delivery_order_status";
 const DELIVERY_LAST_TRACKING_KEY = "farmapos_delivery_last_tracking";
