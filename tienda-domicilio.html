@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sistema Facturacion | Pedidos a domicilio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="pos.css">
+</head>
+<body class="delivery-public-body" data-page="delivery-store">
+  <main class="delivery-store-shell">
+    <section class="delivery-store-hero">
+      <div class="delivery-store-hero-content">
+        <div class="delivery-store-brand">
+          <img src="assets/logo/logo-nubefarma-clean.png" alt="Sistema Facturacion">
+          <span>Pedidos a domicilio</span>
+        </div>
+        <div class="delivery-store-copy">
+          <h1>Elige tus productos y recibe en casa</h1>
+          <p>Catalogo sincronizado con inventario, precios actualizados y orden directa para el vendedor.</p>
+        </div>
+        <div class="delivery-store-status" id="deliveryLoadStatus">Preparando catalogo...</div>
+      </div>
+      <div class="delivery-store-visual" aria-hidden="true">
+        <div class="delivery-store-monitor">
+          <span></span><span></span><span></span>
+        </div>
+        <div class="delivery-store-bag"><i class="bi bi-cart3"></i></div>
+      </div>
+    </section>
+
+    <section class="delivery-store-highlights" aria-label="Beneficios del domicilio">
+      <article><i class="bi bi-lightning-charge"></i><span>Pedido directo</span><strong>Sin intermediarios</strong></article>
+      <article><i class="bi bi-box-seam"></i><span>Inventario real</span><strong>Stock actualizado</strong></article>
+      <article><i class="bi bi-geo-alt"></i><span>Seguimiento</span><strong>Estado en linea</strong></article>
+    </section>
+
+    <section class="delivery-tracking-panel">
+      <div class="delivery-tracking-head">
+        <div>
+          <span>Rastreo de pedido</span>
+          <strong>Consulta el estado actual de tu domicilio</strong>
+        </div>
+        <i class="bi bi-geo-alt"></i>
+      </div>
+      <form class="delivery-tracking-form" id="deliveryTrackingForm">
+        <input id="deliveryTrackingInput" type="text" placeholder="Codigo del pedido o telefono">
+        <button type="submit"><span>Rastrear</span><i class="bi bi-search"></i></button>
+        <button class="delivery-clear-button" id="deliveryTrackingClear" type="button"><span>Limpiar</span><i class="bi bi-x-lg"></i></button>
+      </form>
+      <div class="delivery-tracking-result" id="deliveryTrackingResult"></div>
+    </section>
+
+    <section class="delivery-shop-layout">
+      <div class="delivery-catalog-panel">
+        <div class="delivery-toolbar">
+          <div class="delivery-search">
+            <i class="bi bi-search"></i>
+            <input id="deliverySearchInput" type="text" placeholder="Buscar producto, referencia o categoria">
+          </div>
+          <select id="deliveryCategoryFilter" aria-label="Filtrar categoria">
+            <option value="all">Todas</option>
+          </select>
+        </div>
+        <div class="delivery-product-grid" id="deliveryProductGrid"></div>
+      </div>
+
+      <aside class="delivery-cart-panel">
+        <div class="delivery-cart-head">
+          <div>
+            <span>Tu orden</span>
+            <strong><b id="deliveryCartCount">0</b> producto(s)</strong>
+          </div>
+          <i class="bi bi-bag-check"></i>
+        </div>
+        <div class="delivery-cart-list" id="deliveryCartList"></div>
+        <div class="delivery-total-row">
+          <span>Total estimado</span>
+          <strong id="deliveryCartTotal">$ 0</strong>
+        </div>
+        <form class="delivery-customer-form" id="deliveryCustomerForm">
+          <label class="delivery-field-name">
+            <i class="bi bi-person"></i>
+            <span>Nombre</span>
+            <input name="customerName" type="text" placeholder="Tu nombre" required>
+          </label>
+          <label class="delivery-field-phone">
+            <i class="bi bi-telephone"></i>
+            <span>Telefono</span>
+            <input name="customerPhone" type="tel" placeholder="Celular de contacto" required>
+          </label>
+          <label class="delivery-field-address">
+            <i class="bi bi-geo-alt"></i>
+            <span>Direccion</span>
+            <input name="customerAddress" type="text" placeholder="Direccion de entrega" required>
+          </label>
+          <label class="delivery-field-notes">
+            <i class="bi bi-chat-left-text"></i>
+            <span>Nota opcional</span>
+            <textarea name="customerNotes" rows="3" placeholder="Barrio, referencias, horario o indicaciones"></textarea>
+          </label>
+          <button class="delivery-submit-button" id="deliverySubmitOrder" type="submit" disabled>
+            <span>Enviar pedido</span>
+            <i class="bi bi-arrow-right"></i>
+          </button>
+          <small id="deliveryOrderStatus">Agrega productos para continuar.</small>
+        </form>
+      </aside>
+    </section>
+  </main>
+
+  <script src="delivery-orders.js"></script>
+</body>
+</html>

@@ -31,8 +31,8 @@ const WEB_DB_API_STORAGE_KEY = "farmapos_web_db_api_url";
 const DAILY_WELCOME_STORAGE_KEY = "farmapos_daily_welcome_seen";
 const SESSION_WELCOME_STORAGE_KEY = "farmapos_session_welcome_seen";
 const DASHBOARD_LAUNCH_BANNER_STORAGE_KEY = "farmapos_dashboard_launch_banner_seen_v1";
-const INVENTORY_API_URL = "https://script.google.com/macros/s/AKfycbx_4zP8LJcKvFpg_CtFTw8VfWdP-jBSABiRyJnxZ1V3Ix6MjuDmX9Pz6RL8Q2-7xUhP/exec";
-const API_URL = "https://script.google.com/macros/s/AKfycbx_4zP8LJcKvFpg_CtFTw8VfWdP-jBSABiRyJnxZ1V3Ix6MjuDmX9Pz6RL8Q2-7xUhP/exec";
+const INVENTORY_API_URL = "https://script.google.com/macros/s/AKfycbwXHqOK2r6XEatDnIbiS3F4-sRSzjUHX88fTkkRocEr9LAQ66AnWu6lu0u3C1Grmg1LfA/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbwXHqOK2r6XEatDnIbiS3F4-sRSzjUHX88fTkkRocEr9LAQ66AnWu6lu0u3C1Grmg1LfA/exec";
 const desktopDb = window.farmaposDesktop?.db || null;
 const ONLINE_EXCEL_ONLY = true;
 const browserStorage = window.sessionStorage;
@@ -1961,6 +1961,21 @@ const initialPromotions = [];
 const initialAuditLogs = [];
 const RELEASE_NOTES_ITEMS = [
   {
+    date: "15 de mayo de 2026",
+    title: "Carga premium al iniciar sesion",
+    detail: "El acceso ahora muestra una pantalla de preparacion mas elegante con logo, progreso visual y pasos de seguridad."
+  },
+  {
+    date: "15 de mayo de 2026",
+    title: "Transicion mas profesional al dashboard",
+    detail: "La experiencia posterior al login se siente mas fluida mientras se valida la sesion y se prepara el panel principal."
+  },
+  {
+    date: "15 de mayo de 2026",
+    title: "Mejor lectura de novedades",
+    detail: "El dashboard conserva las actualizaciones recientes en tarjetas destacadas y tambien en el boton de novedades superior."
+  },
+  {
     date: "1 de abril de 2026",
     title: "Accesos mas compactos",
     detail: "Se redujo el alto del login principal y del acceso interno para aprovechar mejor la pantalla."
@@ -1969,16 +1984,6 @@ const RELEASE_NOTES_ITEMS = [
     date: "1 de abril de 2026",
     title: "Version visible en accesos",
     detail: "El login principal y el acceso interno ahora muestran la version actual de la app."
-  },
-  {
-    date: "1 de abril de 2026",
-    title: "Animaciones de entrada",
-    detail: "Se agrego una apertura visual mas profesional para login, dashboard y modulos principales."
-  },
-  {
-    date: "1 de abril de 2026",
-    title: "Nueva paleta visual",
-    detail: "La interfaz adopto azul oscuro, verde limon, amarillo dorado y azul aqua como identidad."
   }
 ];
 
@@ -2464,6 +2469,7 @@ function getAllowedPagesByRole(role) {
     return new Set([
       "dashboard.html",
       "ventas.html",
+      "pedidos-domicilio.html",
       "historico-ventas.html",
       "retiros-caja.html",
       "cierre-caja.html",
@@ -2484,6 +2490,7 @@ function getAllowedPagesByRole(role) {
     return new Set([
       "dashboard.html",
       "ventas.html",
+      "pedidos-domicilio.html",
       "historico-ventas.html",
       "retiros-caja.html",
       "cierre-caja.html",
@@ -2502,6 +2509,7 @@ function getAllowedPagesByRole(role) {
   return new Set([
     "dashboard.html",
     "ventas.html",
+    "pedidos-domicilio.html",
     "historico-ventas.html",
     "retiros-caja.html",
     "cierre-caja.html"
@@ -2894,6 +2902,14 @@ function setupSalesKeyboardShortcuts() {
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
       event.preventDefault();
       document.getElementById("salesSearchInput")?.focus();
+      return;
+    }
+
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "b") {
+      event.preventDefault();
+      const clientSelect = document.getElementById("saleClient");
+      clientSelect?.focus();
+      clientSelect?.showPicker?.();
       return;
     }
 
@@ -4748,6 +4764,7 @@ function renderInventory() {
         <span>${escapeHtml(getCategoryLabel(item.category))}</span>
         <span>${formatCurrency(item.price)}</span>
         <span>Stock: ${item.stock}</span>
+        <button class="btn btn-sm btn-outline-secondary inventory-edit-btn" type="button" data-id="${escapeHtml(item.id)}">Editar</button>
       </article>
     `).join("");
   }
@@ -4910,6 +4927,8 @@ function resetInventoryForm() {
   updateInventoryImagePreview("");
   renderInventoryCommonProductOptions();
   setText("inventoryFormTitle", "Nuevo producto");
+  const saveButton = document.getElementById("inventorySaveButton");
+  if (saveButton) saveButton.textContent = "Guardar producto";
   document.getElementById("inventorySaveButton")?.removeAttribute("disabled");
   updateInventoryFormStatus("Listo para guardar.");
 }
@@ -5055,6 +5074,8 @@ function populateInventoryForm(item) {
   syncInventoryPresetFromName();
   document.getElementById("inventoryActive").value = item.active || "SI";
   setText("inventoryFormTitle", `Editar: ${item.name}`);
+  const saveButton = document.getElementById("inventorySaveButton");
+  if (saveButton) saveButton.textContent = "Actualizar producto";
   updateInventoryFormStatus("Editando producto existente.");
 }
 
@@ -5118,6 +5139,30 @@ function applyRemoteInventoryState(items, updatedAt = null) {
     updatedAt,
     total: state.inventory.length,
     status: `Sincronizado (${state.inventory.length} productos)`
+  };
+  saveData();
+  saveSyncMeta(state.inventorySyncMeta);
+  rerenderCurrentPage();
+}
+
+function upsertInventoryItemLocally(item) {
+  const normalized = normalizeInventoryItem(item, state.inventory.length);
+  const index = state.inventory.findIndex((entry) => (
+    (normalized.id && entry.id === normalized.id)
+    || (normalized.sku && entry.sku === normalized.sku)
+  ));
+
+  if (index >= 0) {
+    state.inventory[index] = normalized;
+  } else {
+    state.inventory.push(normalized);
+  }
+
+  state.inventorySyncMeta = {
+    ...state.inventorySyncMeta,
+    lastSyncAt: new Date().toISOString(),
+    total: state.inventory.length,
+    status: `Producto actualizado (${state.inventory.length} productos)`
   };
   saveData();
   saveSyncMeta(state.inventorySyncMeta);
@@ -5564,10 +5609,16 @@ async function saveInventoryItemToApi(item) {
       item
     })
   });
-  if (!data?.ok || !Array.isArray(data.items)) {
+  if (!data?.ok) {
     throw new Error(data?.error || "No fue posible guardar el producto.");
   }
-  applyRemoteInventoryState(data.items, data.updated_at || null);
+  if (Array.isArray(data.items || data.inventory)) {
+    applyRemoteInventoryState(data.items || data.inventory, data.updated_at || null);
+  } else if (data.item) {
+    upsertInventoryItemLocally(data.item);
+  } else {
+    upsertInventoryItemLocally(item);
+  }
   await addAuditLog({
     module: "inventario",
     action: "actualizar",
@@ -6537,6 +6588,19 @@ function bindInventoryEvents() {
   if (inventoryTableBody && !inventoryTableBody.dataset.bound) {
     inventoryTableBody.dataset.bound = "true";
     inventoryTableBody.addEventListener("click", (event) => {
+      const button = event.target.closest(".inventory-edit-btn");
+      if (!button) return;
+      const item = state.inventory.find((entry) => entry.id === button.dataset.id);
+      if (!item) return;
+      populateInventoryForm(item);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  }
+
+  const inventoryBoard = document.getElementById("inventoryBoard");
+  if (inventoryBoard && !inventoryBoard.dataset.bound) {
+    inventoryBoard.dataset.bound = "true";
+    inventoryBoard.addEventListener("click", (event) => {
       const button = event.target.closest(".inventory-edit-btn");
       if (!button) return;
       const item = state.inventory.find((entry) => entry.id === button.dataset.id);
@@ -10316,6 +10380,11 @@ function buildTicketPrintableDocument(ticketHtml, title = "") {
         .ticket-meta-card span,
         .ticket-meta-card strong { display: block; }
         .ticket-meta-card strong { font-weight: 800; }
+        .ticket-meta-card:first-child strong {
+          font-size: 10px;
+          line-height: 1.15;
+          overflow-wrap: anywhere;
+        }
         .ticket-meta-card span {
           margin-bottom: 3px;
           color: var(--muted);

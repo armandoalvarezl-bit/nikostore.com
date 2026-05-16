@@ -352,9 +352,24 @@ function ensureAuthFeedbackUi() {
     </div>
     <div class="app-loading-overlay" id="appLoadingOverlay" hidden>
       <div class="app-loading-card" role="status" aria-live="polite">
-        <div class="app-loading-spinner"></div>
-        <strong id="appLoadingTitle">Validando acceso</strong>
-        <span id="appLoadingMessage">Consultando usuario en linea...</span>
+        <div class="app-loading-orbit" aria-hidden="true">
+          <span></span>
+          <span></span>
+          <div class="app-loading-logo">
+            <img src="assets/logo/logo-nubefarma-clean.png" alt="">
+          </div>
+        </div>
+        <div class="app-loading-copy">
+          <span class="app-loading-kicker">Acceso seguro</span>
+          <strong id="appLoadingTitle">Validando acceso</strong>
+          <span id="appLoadingMessage">Consultando usuario en linea...</span>
+        </div>
+        <div class="app-loading-progress" aria-hidden="true"><span></span></div>
+        <div class="app-loading-steps" aria-hidden="true">
+          <span><i class="bi bi-shield-check"></i> Credenciales</span>
+          <span><i class="bi bi-cloud-check"></i> Sesion</span>
+          <span><i class="bi bi-speedometer2"></i> Dashboard</span>
+        </div>
       </div>
     </div>
     <div class="auth-promo-modal" id="authPromoModal" hidden>

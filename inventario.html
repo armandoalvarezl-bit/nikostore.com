@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="farmapos-web-db-api-url" content="https://script.google.com/macros/s/AKfycbx_4zP8LJcKvFpg_CtFTw8VfWdP-jBSABiRyJnxZ1V3Ix6MjuDmX9Pz6RL8Q2-7xUhP/exec">
+  <meta name="farmapos-web-db-api-url" content="https://script.google.com/macros/s/AKfycbwXHqOK2r6XEatDnIbiS3F4-sRSzjUHX88fTkkRocEr9LAQ66AnWu6lu0u3C1Grmg1LfA/exec">
   <title>Sistema Facturacion | Inventario</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -19,6 +19,7 @@
       <nav class="app-nav">
         <a href="dashboard.html"><i class="bi bi-grid-1x2-fill"></i><span>Inicio</span></a>
         <a href="ventas.html"><i class="bi bi-receipt-cutoff"></i><span>Ventas</span></a>
+        <a href="pedidos-domicilio.html"><i class="bi bi-scooter"></i><span>Domicilios</span></a>
         <a href="historico-ventas.html"><i class="bi bi-clock-history"></i><span>Historico ventas</span></a>
         <a href="retiros-caja.html"><i class="bi bi-cash-coin"></i><span>Retiros de caja</span></a>
         <a href="cierre-caja.html"><i class="bi bi-cash-stack"></i><span>Cierre de caja</span></a>
@@ -58,17 +59,17 @@
           <input id="inventoryImportInput" type="file" accept=".csv,text/csv" hidden>
           <form id="inventoryForm" class="form-stack inventory-form-grid">
             <input id="inventoryItemId" type="hidden">
-            <div class="form-field">
+            <div class="form-field inventory-field-sku">
               <label for="inventorySku">SKU</label>
               <input class="form-control" id="inventorySku" type="text" placeholder="NBM_01" required>
             </div>
-            <div class="form-field">
+            <div class="form-field inventory-field-name">
               <label for="inventoryName">Producto</label>
               <input class="form-control" id="inventoryName" type="text" placeholder="Nombre del producto" list="inventoryCommonProducts" required>
               <datalist id="inventoryCommonProducts"></datalist>
               <div class="inventory-common-picks" id="inventoryCommonPicks"></div>
             </div>
-            <div class="form-field">
+            <div class="form-field inventory-field-category">
               <label for="inventoryCategory">Categoria</label>
               <select class="form-select" id="inventoryCategory" required>
                 <option value="skincare">Skincare</option>
@@ -78,31 +79,31 @@
                 <option value="general">General</option>
               </select>
             </div>
-            <div class="form-field">
+            <div class="form-field inventory-field-price">
               <label for="inventoryPrice">Precio</label>
               <input class="form-control" id="inventoryPrice" type="number" min="0" step="100" placeholder="0" required>
             </div>
-            <div class="form-field">
+            <div class="form-field inventory-field-stock">
               <label for="inventoryStock">Stock</label>
               <input class="form-control" id="inventoryStock" type="number" min="0" step="1" placeholder="0" required>
             </div>
-            <div class="form-field">
+            <div class="form-field inventory-field-batch">
               <label for="inventoryBatch">Lote / referencia</label>
               <input class="form-control" id="inventoryBatch" type="text" placeholder="BEL-001">
             </div>
-            <div class="form-field">
+            <div class="form-field inventory-field-date">
               <label for="inventoryExpirationDate">Fecha de vencimiento o reposicion</label>
               <input class="form-control" id="inventoryExpirationDate" type="date">
             </div>
-            <div class="form-field">
+            <div class="form-field inventory-field-maker">
               <label for="inventoryLaboratory">Marca / fabricante</label>
               <input class="form-control" id="inventoryLaboratory" type="text" placeholder="Marca del producto">
             </div>
-            <div class="form-field">
+            <div class="form-field inventory-field-registry">
               <label for="inventoryInvima">Registro sanitario / referencia</label>
               <input class="form-control" id="inventoryInvima" type="text" placeholder="Registro o referencia interna">
             </div>
-            <div class="form-field inventory-form-full inventory-barcode-field">
+            <div class="form-field inventory-form-full inventory-barcode-field inventory-field-barcode">
               <label for="inventoryBarcode">Codigo de barras</label>
               <input class="form-control" id="inventoryBarcode" type="text" placeholder="770...">
               <div class="inventory-scan-actions">
@@ -113,11 +114,11 @@
                 <small>Tambien puedes usar un lector externo en este campo.</small>
               </div>
             </div>
-            <div class="form-field inventory-form-full">
+            <div class="form-field inventory-form-full inventory-field-description">
               <label for="inventoryDescription">Descripcion</label>
               <textarea class="form-control" id="inventoryDescription" rows="3" placeholder="Presentacion o detalle del producto"></textarea>
             </div>
-            <div class="form-field inventory-form-full">
+            <div class="form-field inventory-form-full inventory-field-image">
               <label for="inventoryImageUrl">Imagen del producto</label>
               <input class="form-control" id="inventoryImageUrl" type="text" placeholder="Pega una URL o carga una imagen">
               <input id="inventoryImageData" type="hidden">
@@ -145,7 +146,7 @@
                 </div>
               </div>
             </div>
-            <div class="form-field">
+            <div class="form-field inventory-field-active">
               <label for="inventoryActive">Activo</label>
               <select class="form-select" id="inventoryActive">
                 <option value="SI">Si</option>

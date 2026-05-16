@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="farmapos-web-db-api-url" content="https://script.google.com/macros/s/AKfycbx_4zP8LJcKvFpg_CtFTw8VfWdP-jBSABiRyJnxZ1V3Ix6MjuDmX9Pz6RL8Q2-7xUhP/exec">
+  <meta name="farmapos-web-db-api-url" content="https://script.google.com/macros/s/AKfycbwXHqOK2r6XEatDnIbiS3F4-sRSzjUHX88fTkkRocEr9LAQ66AnWu6lu0u3C1Grmg1LfA/exec">
   <title>Sistema Facturacion | Usuarios</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -19,6 +19,7 @@
       <nav class="app-nav">
         <a href="dashboard.html"><i class="bi bi-grid-1x2-fill"></i><span>Inicio</span></a>
         <a href="ventas.html"><i class="bi bi-receipt-cutoff"></i><span>Ventas</span></a>
+        <a href="pedidos-domicilio.html"><i class="bi bi-scooter"></i><span>Domicilios</span></a>
         <a href="historico-ventas.html"><i class="bi bi-clock-history"></i><span>Historico ventas</span></a>
         <a href="retiros-caja.html"><i class="bi bi-cash-coin"></i><span>Retiros de caja</span></a>
         <a href="cierre-caja.html"><i class="bi bi-cash-stack"></i><span>Cierre de caja</span></a>
@@ -35,12 +36,14 @@
         <small id="sessionLoginAt">--</small>
       </div>
     </aside>
-    <main class="app-main">
-      <header class="app-topbar">
+    <main class="app-main users-admin-main">
+      <header class="app-topbar users-admin-topbar">
         <div>
           <p class="section-kicker">Usuarios</p>
           <h1>Gestion de accesos</h1>
+          <span class="users-admin-subtitle">Administra perfiles, estados y empresas vinculadas desde una vista mas clara.</span>
         </div>
+        <a class="btn btn-outline-secondary" href="licencias.html"><i class="bi bi-shield-check"></i><span>Licencias</span></a>
       </header>
 
       <section class="kpi-grid licensing-kpi-grid">
@@ -50,7 +53,7 @@
         <article class="kpi-card"><small>Empresas</small><strong id="userMetricCompanies">0</strong><span>Empresas vinculadas</span></article>
       </section>
 
-      <section class="module-card mt-4 licensing-users-card">
+      <section class="module-card mt-4 licensing-users-card users-admin-card">
         <div class="module-head">
           <div>
             <h2>Usuarios por empresa</h2>
@@ -62,47 +65,63 @@
           <span>Este modulo solo esta disponible para usuarios con rol administrador.</span>
         </div>
         <div id="userAdminContent" hidden>
-          <form id="userAdminForm" class="settings-form-stack">
-            <input id="userAdminId" type="hidden">
-            <div class="settings-form-grid">
-              <label class="settings-field">
-                <span>Empresa</span>
-                <select id="userAdminCompanyId" class="form-select"></select>
-              </label>
-              <label class="settings-field"><span>Nombre</span><input id="userAdminName" type="text" placeholder="Nombre completo" maxlength="120"></label>
-              <label class="settings-field"><span>Usuario</span><input id="userAdminUsername" type="text" placeholder="usuario" maxlength="60"></label>
-              <label class="settings-field"><span>Clave</span><input id="userAdminPassword" type="password" placeholder="Solo diligencia para crear o cambiar clave" maxlength="120"></label>
-              <label class="settings-field">
-                <span>Rol</span>
-                <select id="userAdminRole" class="form-select">
-                  <option value="cajero">Cajero</option>
-                  <option value="supervisor">Supervisor</option>
-                  <option value="admin_empresa">Administrador tienda</option>
-                </select>
-              </label>
-              <label class="settings-field">
-                <span>Estado</span>
-                <select id="userAdminActive" class="form-select">
-                  <option value="SI">Activo</option>
-                  <option value="NO">Inactivo</option>
-                </select>
-              </label>
-            </div>
-            <div class="settings-form-actions">
-              <p class="settings-form-note" id="userAdminSummary">Crea usuarios para caja, supervisor o administracion.</p>
-              <div class="settings-inline-actions">
-                <button class="btn btn-outline-secondary" id="cancelUserAdminEdit" type="button">Limpiar</button>
-                <button class="btn btn-brand" type="submit">Guardar usuario</button>
+          <div class="users-admin-layout">
+            <form id="userAdminForm" class="settings-form-stack users-admin-form-panel">
+              <input id="userAdminId" type="hidden">
+              <div class="users-panel-head">
+                <div>
+                  <span>Ficha de acceso</span>
+                  <strong>Crear o editar usuario</strong>
+                </div>
+                <i class="bi bi-person-plus"></i>
               </div>
-            </div>
-          </form>
-          <section class="licensing-list-shell">
-            <div class="licensing-list-head">
-              <strong>Usuarios guardados</strong>
-              <span>Accesos operativos por empresa</span>
-            </div>
-            <div class="user-admin-list" id="userAdminList"></div>
-          </section>
+              <div class="settings-form-grid users-form-grid">
+                <label class="settings-field users-field-wide">
+                  <span>Empresa</span>
+                  <select id="userAdminCompanyId" class="form-select"></select>
+                </label>
+                <label class="settings-field"><span>Nombre completo</span><input id="userAdminName" type="text" placeholder="Ej. Maria Gomez" maxlength="120"></label>
+                <label class="settings-field"><span>Usuario de ingreso</span><input id="userAdminUsername" type="text" placeholder="usuario" maxlength="60"></label>
+                <label class="settings-field"><span>Clave</span><input id="userAdminPassword" type="password" placeholder="Crear o cambiar clave" maxlength="120"></label>
+                <label class="settings-field">
+                  <span>Rol operativo</span>
+                  <select id="userAdminRole" class="form-select">
+                    <option value="cajero">Cajero</option>
+                    <option value="supervisor">Supervisor</option>
+                    <option value="admin_empresa">Administrador tienda</option>
+                  </select>
+                </label>
+                <label class="settings-field">
+                  <span>Estado de acceso</span>
+                  <select id="userAdminActive" class="form-select">
+                    <option value="SI">Activo</option>
+                    <option value="NO">Inactivo</option>
+                  </select>
+                </label>
+              </div>
+              <div class="users-access-notes">
+                <div><i class="bi bi-key"></i><span>Al editar, deja la clave vacia para conservar la actual.</span></div>
+                <div><i class="bi bi-building"></i><span>La empresa define a que negocio queda asociado el acceso.</span></div>
+              </div>
+              <div class="settings-form-actions users-form-actions">
+                <p class="settings-form-note" id="userAdminSummary">Crea usuarios para caja, supervisor o administracion.</p>
+                <div class="settings-inline-actions">
+                  <button class="btn btn-outline-secondary" id="cancelUserAdminEdit" type="button">Limpiar</button>
+                  <button class="btn btn-brand" type="submit">Guardar usuario</button>
+                </div>
+              </div>
+            </form>
+            <section class="licensing-list-shell users-list-panel">
+              <div class="licensing-list-head">
+                <div>
+                  <strong>Usuarios guardados</strong>
+                  <span>Accesos operativos por empresa</span>
+                </div>
+                <i class="bi bi-people"></i>
+              </div>
+              <div class="user-admin-list" id="userAdminList"></div>
+            </section>
+          </div>
         </div>
       </section>
     </main>
