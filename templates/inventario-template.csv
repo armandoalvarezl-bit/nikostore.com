@@ -1,0 +1,7 @@
+id,sku,nombre,categoria,precio,stock,lote,fecha_vencimiento,laboratorio,registro_invima,codigo_barras,descripcion,activo
+1,FP-001,Acetaminofen 500 mg,analgesico,8500,24,LT-001,2027-12-31,Genfar,INVIMA-2026M-000001,770000000001,Tabletas x 100 unidades,SI
+2,FP-002,Ibuprofeno 400 mg,analgesico,12400,18,LT-002,2027-11-15,Lafrancol,INVIMA-2026M-000002,770000000002,Capsulas blandas x 50,SI
+3,FP-003,Vitamina C 1 g,vitamina,18900,31,LT-003,2028-01-20,MK,INVIMA-2026M-000003,770000000003,Tabletas efervescentes,SI
+4,FP-004,Protector solar FPS 50,cuidado,35900,9,LT-004,2027-09-10,Procaps,INVIMA-2026NS-000004,770000000004,Presentacion 120 ml,SI
+5,FP-005,Alcohol antiseptico,cuidado,6200,42,LT-005,2028-03-05,Quirumed,INVIMA-2026NS-000005,770000000005,Frasco 350 ml,SI
+6,FP-006,Multivitaminico adulto,vitamina,27400,16,LT-006,2027-08-22,Nutrapharm,INVIMA-2026M-000006,770000000006,Frasco x 60 capsulas,SI
