@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="farmapos-web-db-api-url" content="https://script.google.com/macros/s/AKfycbwbBzdjN06VAuUl_iw8o6VTtM0CauEeQcE_883vDseVe9nJ92mM-AYzG2kPMAd3qXN0sw/exec">
+  <meta name="farmapos-web-db-api-url" content="https://script.google.com/macros/s/AKfycbwrVF471WgB-BigQZGYcF3LvqhjPRr1W6UGCF6VOGnEqrmC7WlaAVM_mJOTURfMs4MOzw/exec">
   <title>Sistema Facturacion | Configuracion</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -100,21 +100,25 @@
               <i class="bi bi-journal-text"></i>
               <span>Hecho en Colombia. Soporte 24/7. Documentacion interna para implementacion, activacion y soporte.</span>
             </div>
-            <div class="settings-form-stack">
-              <div class="settings-field">
-                <span>Mensaje de actualizacion</span>
-                <textarea id="systemUpdateNotificationMessage" class="form-control" rows="3" placeholder="Escribe un mensaje breve para notificar a los usuarios."></textarea>
-              </div>
-              <div class="settings-inline-actions">
-                <button class="btn btn-brand" id="sendSystemUpdateNotificationButton" type="button">Enviar notificacion</button>
-              </div>
-              <p class="settings-form-note">La notificacion se mostrara como un aviso tipo SMS dentro de la app.</p>
-            </div>
             <div class="settings-inline-actions">
               <a class="btn btn-outline-secondary" href="manual-usuario.html">Manual de usuario</a>
               <a class="btn btn-outline-secondary" href="plan-comercial.html">Plan comercial</a>
               <a class="btn btn-outline-secondary" href="checklist-lanzamiento.html">Checklist lanzamiento</a>
             </div>
+          </div>
+        </article>
+        <article id="systemUpdateLinkCard" class="module-card" data-internal-only="true">
+          <div class="module-head">
+            <div>
+              <h2>Notificaciones del sistema</h2>
+              <p>Panel dedicado para publicar mensajes globales a usuarios.</p>
+            </div>
+          </div>
+          <div class="settings-form-stack">
+            <div class="settings-inline-actions">
+              <a class="btn btn-brand" href="system-update.html">Abrir panel de notificaciones</a>
+            </div>
+            <p class="settings-form-note">Este panel está separado para administrar avisos globales.</p>
           </div>
         </article>
         <div class="settings-sidebar-column">

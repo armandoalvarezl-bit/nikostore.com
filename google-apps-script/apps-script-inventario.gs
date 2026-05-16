@@ -18,7 +18,7 @@ var SUPPORT_TICKETS_SHEET_NAME = 'SoporteTickets';
 var SUPPORT_MESSAGES_SHEET_NAME = 'SoporteMensajes';
 var REQUIRED_HEADERS = ['id', 'sku', 'nombre', 'categoria', 'precio', 'stock', 'lote', 'fecha_vencimiento', 'laboratorio', 'registro_invima', 'codigo_barras', 'descripcion', 'imagen_url', 'activo'];
 var LEGACY_SALES_HEADERS = ['id', 'ticket_numero', 'fecha', 'hora', 'cliente_nombre', 'cliente_documento', 'metodo_pago', 'recibido', 'cambio', 'subtotal', 'impuesto', 'total', 'items_json', 'creado_en'];
-var SALES_HEADERS = ['id', 'ticket_numero', 'fecha', 'hora', 'cliente_nombre', 'cliente_documento', 'metodo_pago', 'recibido', 'cambio', 'subtotal', 'impuesto', 'total', 'items_json', 'creado_en', 'puntos_usados', 'descuento_puntos', 'puntos_ganados', 'domicilio_estado', 'domicilio_actualizado_en'];
+var SALES_HEADERS = ['id', 'ticket_numero', 'fecha', 'hora', 'cliente_nombre', 'cliente_documento', 'metodo_pago', 'recibido', 'cambio', 'subtotal', 'impuesto', 'total', 'items_json', 'creado_en', 'puntos_usados', 'descuento_puntos', 'puntos_ganados', 'domicilio_estado', 'domicilio_actualizado_en', 'estado', 'anulado_en', 'anulado_por', 'motivo_anulacion'];
 var USER_HEADERS = ['Id', 'Nombre', 'Usuario', 'contraseña', 'Estado'];
 var WITHDRAWALS_HEADERS = ['id', 'retiro_numero', 'fecha', 'hora', 'monto', 'motivo', 'cajero_usuario', 'cajero_nombre', 'supervisor_usuario', 'supervisor_nombre', 'creado_en'];
 var CASH_CLOSURES_HEADERS = ['id', 'cierre_numero', 'fecha', 'creado_en', 'usuario', 'apertura', 'ventas_efectivo', 'ventas_tarjeta', 'ventas_transferencia', 'retiros_total', 'ajuste_manual', 'efectivo_contado', 'efectivo_esperado', 'diferencia', 'transacciones', 'ventas_total', 'unidades', 'observaciones', 'ventas_json'];
@@ -230,9 +230,6 @@ function doPost(e) {
     if (action === 'save_system_update') {
       var settingsSheet = getSettingsSheet_();
       var message = String(payload.message || '').trim();
-      if (!message) {
-        throw new Error('El mensaje de actualización del sistema no puede estar vacío.');
-      }
 
       var savedMessage = saveSetting_(settingsSheet, 'system_update_message', message);
       return jsonResponse_({
@@ -466,6 +463,80 @@ function doPost(e) {
         sale: savedSale,
         total: sales.length,
         sales: sales
+      });
+    }
+
+    if (action === 'anular') {
+      var salesSheet = getSalesSheet_();
+      var saleReference = String(payload.saleId || payload.id || payload.ticketNumber || payload.ticket_numero || '').trim();
+      if (!saleReference) {
+        throw new Error('No se recibio el identificador de la venta a anular.');
+      }
+
+      var salesValues = salesSheet.getDataRange().getValues();
+      if (salesValues.length < 2) {
+        throw new Error('No hay ventas registradas.');
+      }
+
+      var salesHeaders = salesValues[0].map(function(header) {
+        return String(header || '').trim();
+      });
+      var idIndex = salesHeaders.indexOf('id');
+      var ticketIndex = salesHeaders.indexOf('ticket_numero');
+      var statusIndex = salesHeaders.indexOf('estado');
+      var annulledAtIndex = salesHeaders.indexOf('anulado_en');
+      var annulledByIndex = salesHeaders.indexOf('anulado_por');
+      var annulledReasonIndex = salesHeaders.indexOf('motivo_anulacion');
+
+      var targetRowIndex = -1;
+      for (var rowIndex = 1; rowIndex < salesValues.length; rowIndex += 1) {
+        var rowId = idIndex >= 0 ? String(salesValues[rowIndex][idIndex] || '').trim() : '';
+        var rowTicket = ticketIndex >= 0 ? String(salesValues[rowIndex][ticketIndex] || '').trim() : '';
+        if (rowId === saleReference || rowTicket === saleReference) {
+          targetRowIndex = rowIndex;
+          break;
+        }
+      }
+
+      if (targetRowIndex === -1) {
+        throw new Error('Venta no encontrada.');
+      }
+
+      var saleRow = rowToItem_(salesHeaders, salesValues[targetRowIndex]);
+      var storedSale = normalizeStoredSale_(saleRow);
+      if (storedSale.status === 'ANULADA') {
+        throw new Error('La venta ya esta anulada.');
+      }
+
+      if (statusIndex >= 0) {
+        salesValues[targetRowIndex][statusIndex] = 'ANULADA';
+      }
+      if (annulledAtIndex >= 0) {
+        salesValues[targetRowIndex][annulledAtIndex] = new Date().toISOString();
+      }
+      if (annulledByIndex >= 0) {
+        salesValues[targetRowIndex][annulledByIndex] = String(payload.annulledBy || payload.cancelledBy || '').trim();
+      }
+      if (annulledReasonIndex >= 0) {
+        salesValues[targetRowIndex][annulledReasonIndex] = String(payload.annulledReason || payload.reason || '').trim();
+      }
+
+      salesSheet.getRange(targetRowIndex + 1, 1, 1, salesHeaders.length).setValues([salesValues[targetRowIndex]]);
+
+      if (Array.isArray(storedSale.items) && storedSale.items.length) {
+        var inventorySheet = getInventorySheet_();
+        restoreSaleStock_(inventorySheet, storedSale.items);
+      }
+
+      var sales = readSalesItems_(salesSheet);
+      return jsonResponse_({
+        ok: true,
+        action: 'anular',
+        updated_at: new Date().toISOString(),
+        sale: normalizeStoredSale_(rowToItem_(salesHeaders, salesValues[targetRowIndex])),
+        total: sales.length,
+        sales: sales,
+        inventory: readInventoryItems_(getInventorySheet_())
       });
     }
 
@@ -1233,6 +1304,11 @@ function normalizeStoredSale_(sale) {
     items = [];
   }
 
+  var status = String(sale.estado || sale.status || '').trim().toUpperCase();
+  if (status !== 'ANULADA') {
+    status = 'ACTIVA';
+  }
+
   return {
     id: String(sale.id || '').trim(),
     ticketNumber: String(sale.ticket_numero || '').trim(),
@@ -1251,6 +1327,10 @@ function normalizeStoredSale_(sale) {
     earnedPoints: Number(sale.puntos_ganados || 0),
     deliveryStatus: String(sale.domicilio_estado || '').trim(),
     deliveryUpdatedAt: String(sale.domicilio_actualizado_en || '').trim(),
+    status: status,
+    annulledAt: String(sale.anulado_en || sale.annulledAt || '').trim(),
+    annulledBy: String(sale.anulado_por || sale.annulledBy || '').trim(),
+    annulledReason: String(sale.motivo_anulacion || sale.annulledReason || '').trim(),
     items: Array.isArray(items) ? items : []
   };
 }
@@ -1835,7 +1915,11 @@ function appendSale_(sheet, sale) {
     normalized.loyaltyDiscount,
     normalized.earnedPoints,
     normalized.deliveryStatus || (isDeliverySale_(normalized) ? 'pendiente' : ''),
-    normalized.deliveryUpdatedAt || (isDeliverySale_(normalized) ? createdAt : '')
+    normalized.deliveryUpdatedAt || (isDeliverySale_(normalized) ? createdAt : ''),
+    normalized.status || 'ACTIVA',
+    normalized.annulledAt || '',
+    normalized.annulledBy || '',
+    normalized.annulledReason || ''
   ];
 
   sheet.appendRow(rowValues);
@@ -2211,6 +2295,63 @@ function decrementStock_(sheet, items) {
   updates.forEach(function(update) {
     if (!update.applied) {
       throw new Error('No se encontró el producto para descontar stock: ' + (update.sku || update.id));
+    }
+  });
+
+  sheet.getRange(2, 1, values.length - 1, headers.length).setValues(values.slice(1));
+}
+
+function restoreSaleStock_(sheet, items) {
+  var values = sheet.getDataRange().getValues();
+  if (values.length < 2) {
+    throw new Error('La hoja no contiene productos para reponer stock.');
+  }
+
+  var headers = values[0].map(function(header) {
+    return String(header).trim();
+  });
+  var stockIndex = headers.indexOf('stock');
+  if (stockIndex === -1) {
+    throw new Error('No existe la columna "stock" en la hoja.');
+  }
+
+  var updates = items.map(function(item) {
+    return {
+      id: String(item.id || '').trim(),
+      sku: String(item.sku || '').trim(),
+      quantity: Number(item.quantity != null ? item.quantity : item.cantidad != null ? item.cantidad : item.stock != null ? item.stock : 0)
+    };
+  });
+
+  updates.forEach(function(update) {
+    if (!update.id && !update.sku) {
+      throw new Error('Cada item debe incluir id o sku para reponer stock.');
+    }
+    if (!isFinite(update.quantity) || update.quantity <= 0) {
+      throw new Error('La cantidad a reponer debe ser mayor que cero.');
+    }
+  });
+
+  for (var rowIndex = 1; rowIndex < values.length; rowIndex += 1) {
+    var current = normalizeStoredItem_(rowToItem_(headers, values[rowIndex]));
+    var matchedUpdate = null;
+
+    for (var updateIndex = 0; updateIndex < updates.length; updateIndex += 1) {
+      var update = updates[updateIndex];
+      if ((update.id && current.id === update.id) || (update.sku && current.sku === update.sku)) {
+        matchedUpdate = update;
+        break;
+      }
+    }
+
+    if (!matchedUpdate) continue;
+    values[rowIndex][stockIndex] = current.stock + matchedUpdate.quantity;
+    matchedUpdate.applied = true;
+  }
+
+  updates.forEach(function(update) {
+    if (!update.applied) {
+      throw new Error('No se encontró el producto para reponer stock: ' + (update.sku || update.id));
     }
   });
 

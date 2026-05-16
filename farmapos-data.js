@@ -31,8 +31,8 @@ const WEB_DB_API_STORAGE_KEY = "farmapos_web_db_api_url";
 const DAILY_WELCOME_STORAGE_KEY = "farmapos_daily_welcome_seen";
 const SESSION_WELCOME_STORAGE_KEY = "farmapos_session_welcome_seen";
 const DASHBOARD_LAUNCH_BANNER_STORAGE_KEY = "farmapos_dashboard_launch_banner_seen_v1";
-const INVENTORY_API_URL = "https://script.google.com/macros/s/AKfycbwbBzdjN06VAuUl_iw8o6VTtM0CauEeQcE_883vDseVe9nJ92mM-AYzG2kPMAd3qXN0sw/exec";
-const API_URL = "https://script.google.com/macros/s/AKfycbwbBzdjN06VAuUl_iw8o6VTtM0CauEeQcE_883vDseVe9nJ92mM-AYzG2kPMAd3qXN0sw/exec";
+const INVENTORY_API_URL = "https://script.google.com/macros/s/AKfycbwrVF471WgB-BigQZGYcF3LvqhjPRr1W6UGCF6VOGnEqrmC7WlaAVM_mJOTURfMs4MOzw/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbwrVF471WgB-BigQZGYcF3LvqhjPRr1W6UGCF6VOGnEqrmC7WlaAVM_mJOTURfMs4MOzw/exec";
 const desktopDb = window.farmaposDesktop?.db || null;
 const ONLINE_EXCEL_ONLY = true;
 const browserStorage = window.sessionStorage;
@@ -1217,6 +1217,18 @@ async function fetchSystemUpdateNotification() {
   }
 }
 
+async function loadSystemUpdateNotificationSettings() {
+  try {
+    const message = await fetchSystemUpdateNotification();
+    const textarea = document.getElementById("systemUpdateNotificationMessage");
+    const preview = document.getElementById("currentSystemUpdateMessage");
+    if (textarea && message) textarea.value = message;
+    if (preview) preview.textContent = message || "Sin mensaje activo.";
+  } catch {
+    // Ignoramos errores de carga de la notificación.
+  }
+}
+
 async function maybeShowPendingSystemUpdateNotification() {
   try {
     const message = await fetchSystemUpdateNotification();
@@ -1234,21 +1246,26 @@ async function maybeShowPendingSystemUpdateNotification() {
 
 async function sendSystemUpdateNotification() {
   const message = String(document.getElementById("systemUpdateNotificationMessage")?.value || "").trim();
-  if (!message) {
-    showInfoDialog("Escribe el mensaje de actualizacion antes de enviarlo.", {
-      title: "Mensaje requerido",
-      variant: "warn"
-    });
-    return;
-  }
+  const isClearing = !message;
 
   try {
     await postExcelAction("save_system_update", { message });
-    showSystemUpdateNotification(message, {
-      title: "Notificacion enviada",
-      variant: "success",
-      duration: 5200
-    });
+    if (isClearing) {
+      showSystemUpdateNotification("Notificacion desactivada.", {
+        title: "Actualizacion del sistema",
+        variant: "success",
+        duration: 5200
+      });
+    } else {
+      showSystemUpdateNotification(message, {
+        title: "Notificacion enviada",
+        variant: "success",
+        duration: 5200
+      });
+    }
+
+    const preview = document.getElementById("currentSystemUpdateMessage");
+    if (preview) preview.textContent = message || "Sin mensaje activo.";
   } catch (error) {
     showInfoDialog(error?.message || "No fue posible guardar la notificacion.", {
       title: "Error",
@@ -5823,22 +5840,60 @@ async function annulSaleInApi({ saleId, annulledBy, annulledReason }) {
     if (Array.isArray(data?.inventory)) {
       applyRemoteInventoryState(data.inventory, new Date().toISOString());
     }
-      if (Array.isArray(data?.clients)) {
-        state.clients = data.clients.map(normalizeClientRecord);
-        saveData();
-      }
-      const saved = normalizeSaleRecord(data?.sale, 0);
-      await addAuditLog({
-        module: "ventas",
+    if (Array.isArray(data?.clients)) {
+      state.clients = data.clients.map(normalizeClientRecord);
+      saveData();
+    }
+    const saved = normalizeSaleRecord(data?.sale, 0);
+    await addAuditLog({
+      module: "ventas",
+      action: "anular",
+      entityId: saved.id,
+      entityName: saved.ticketNumber,
+      detail: `Venta anulada por ${annulledBy}: ${annulledReason}`
+    });
+    return saved;
+  }
+
+  if (isWebDbApiEnabled()) {
+    const data = await fetchJsonWithTimeout(INVENTORY_API_URL, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "text/plain;charset=utf-8"
+      },
+      body: JSON.stringify({
         action: "anular",
-        entityId: saved.id,
-        entityName: saved.ticketNumber,
-        detail: `Venta anulada por ${annulledBy}: ${annulledReason}`
-      });
-      return saved;
+        saleId,
+        annulledBy,
+        annulledReason
+      })
+    });
+
+    if (!data?.ok || !Array.isArray(data?.sales) || !data?.sale) {
+      throw new Error(data?.error || "No fue posible anular la venta en Excel en linea.");
     }
 
-  throw new Error("La anulacion remota de ventas no esta disponible en este modo.")
+    applyRemoteSalesState(data.sales);
+    if (Array.isArray(data.inventory)) {
+      applyRemoteInventoryState(data.inventory, data.updated_at || null);
+    }
+    if (Array.isArray(data.clients)) {
+      state.clients = data.clients.map(normalizeClientRecord);
+      saveData();
+    }
+    const saved = normalizeSaleRecord(data.sale, 0);
+    await addAuditLog({
+      module: "ventas",
+      action: "anular",
+      entityId: saved.id,
+      entityName: saved.ticketNumber,
+      detail: `Venta anulada por ${annulledBy}: ${annulledReason}`
+    });
+    return saved;
+  }
+
+  throw new Error("La anulacion remota de ventas no esta disponible en este modo.");
 }
 
 async function syncPharmacyProfileFromApi() {
@@ -9464,6 +9519,8 @@ function renderSettings() {
   if (restrictedNode) restrictedNode.hidden = canEditProfile;
   if (profileContentNode) profileContentNode.hidden = !canEditProfile;
   if (internalCardNode) internalCardNode.hidden = !isInternalSession;
+  const systemUpdateLinkNode = document.getElementById('systemUpdateLinkCard');
+  if (systemUpdateLinkNode) systemUpdateLinkNode.hidden = !isInternalSession;
   if (supportCardNode) supportCardNode.hidden = false;
   if (settingsLayoutNode) {
     settingsLayoutNode.dataset.internalSession = isInternalSession ? "true" : "false";
@@ -9960,7 +10017,7 @@ async function annulSaleById(saleId) {
   if (!confirmed) return;
 
   try {
-    if (isDesktopDbEnabled()) {
+    if (isDesktopDbEnabled() || isWebDbApiEnabled()) {
       await withLoading(async () => {
         await annulSaleInApi({
           saleId: sale.id,
@@ -9972,7 +10029,7 @@ async function annulSaleById(saleId) {
         message: "Actualizando estado, stock y cliente en Excel en linea..."
       });
     } else {
-      throw new Error("La anulacion SQL no esta disponible porque la app no detecto la conexion desktop con Excel en linea.");
+      throw new Error("La anulacion no esta disponible porque no se detecto conexion con Excel en linea.");
     }
   } catch (error) {
     console.error("No fue posible anular la venta:", error);
@@ -11863,6 +11920,7 @@ function initializePage() {
     renderSettings();
     bindSettingsEvents();
     loadAvailablePrinters();
+    loadSystemUpdateNotificationSettings();
   }
   if (page === "licensing") {
     renderLicensingPage();
